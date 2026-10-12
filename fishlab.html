@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>물고기 도감 미리보기</title>
+    <style>
+      body { margin: 0; background: #2b3a3c; color: #eee; font: 13px sans-serif; overflow: hidden; }
+      #icons { position: fixed; left: 0; right: 0; bottom: 0; display: flex; gap: 10px; padding: 8px; background: #0008; flex-wrap: wrap; }
+      #icons div { text-align: center; }
+      #icons svg { width: 124px; image-rendering: pixelated; display: block; background: #c6c6c6; }
+      #labels span { position: fixed; transform: translateX(-50%); font-weight: bold; text-shadow: 0 1px 2px #000; }
+    </style>
+  </head>
+  <body>
+    <!-- 개발용: 9종 복셀 물고기와 픽셀 아이콘을 한 화면에서 비교한다. 빌드에는 포함되지 않는다 -->
+    <div id="labels"></div>
+    <div id="icons"></div>
+    <script type="module" src="/src/dev/fishlab.ts"></script>
+  </body>
+</html>

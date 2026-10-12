@@ -1,0 +1,22 @@
+{
+  "name": "fishing",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "deploy": "npm run build && firebase deploy --only hosting,firestore:rules --project voxel-fishing-choi --non-interactive"
+  },
+  "dependencies": {
+    "firebase": "^12.7.0",
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "@types/three": "^0.186.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.2"
+  }
+}

@@ -1,0 +1,41 @@
+/* 낚시터 선택은 메뉴와 시작 화면 안에만 표시한다. 플레이 화면은 기존의 간결한 HUD를 유지한다. */
+.start .start-card, body.voxel .start .start-card { width: min(920px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto; }
+.start .start-card .keys { columns: 2; margin: 16px 0; }
+.fishery-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 16px 0 22px; }
+.fishery-card { display: block; padding: 10px; text-align: left; color: #263126; background: #d6d5c3; font: inherit; cursor: pointer; border: 3px solid #4d5646; border-radius: 0; box-shadow: inset 2px 2px #f6f3dd, inset -2px -2px #8d9280; }
+.fishery-card:hover { background: #e4e3cd; }
+.fishery-card.selected { border-color: var(--map-accent); outline: 2px solid #ffffff77; }
+.fishery-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 9px 0 5px; }
+.fishery-heading b { font-size: 15px; }
+.fishery-heading em { font-size: 10px; font-style: normal; padding: 3px 5px; background: #465744; color: #f2f2df; }
+.fishery-card > small { display: block; color: #4d5c49; font-size: 11px; line-height: 1.7; }
+.fishery-desc { display: block; font-size: 12px; line-height: 1.7; margin: 8px 0; }
+.fishery-targets { display: block; margin: 8px 0 5px; font-size: 12px; color: #344c36; }
+.fishery-preview { position: relative; display: block; height: 74px; overflow: hidden; background: linear-gradient(#a8ccd2 0 38%, var(--map-water) 38% 100%); image-rendering: pixelated; }
+.fishery-preview i { position: absolute; display: block; }
+.preview-hill { left: -8%; top: 3%; width: 116%; height: 45%; background: var(--map-leaf); clip-path: polygon(0 90%, 12% 90%, 12% 55%, 23% 55%, 23% 30%, 36% 30%, 36% 75%, 52% 75%, 52% 45%, 66% 45%, 66% 10%, 81% 10%, 81% 60%, 100% 60%, 100% 100%, 0 100%); }
+.preview-shore { bottom: 0; left: 0; width: 100%; height: 8px; background: var(--map-sand); }
+.preview-deck { bottom: 12px; right: 18%; width: 25%; height: 7px; background: #9c7a53; box-shadow: -28px 0 #9c7a53, 0 6px #42504a; }
+.preview-roof { bottom: 21px; right: 21%; width: 14%; height: 15px; background: #dbd3b3; border-top: 5px solid #556e54; }
+.fishery-preview.lotus .preview-hill { height: 32%; top: 16%; }
+.fishery-preview.lotus { background: radial-gradient(ellipse at 18% 71%, #98bd58 0 7px, transparent 8px), radial-gradient(ellipse at 39% 58%, #659747 0 9px, transparent 10px), linear-gradient(#c8e2c2 0 38%, var(--map-water) 38% 100%); }
+.fishery-preview.moon { background: radial-gradient(circle at 77% 20%, #ecedce 0 7px, transparent 8px), linear-gradient(#243b60 0 38%, var(--map-water) 38% 100%); }
+.fishery-preview.moon .preview-hill { height: 63%; top: 0; background: #526772; }
+.fishery-preview.gold .preview-hill { top: 30%; height: 14%; clip-path: none; }
+.fishery-preview.gold .preview-roof { border-top-color: #b6764a; }
+.encounter-forecast { margin: 20px 0; padding: 14px; background: #46544612; border: 2px solid #73816a55; }
+.forecast-note { font-size: 11px; line-height: 1.7; color: var(--dim); }
+.encounter-rows { display: grid; gap: 7px; margin-top: 12px; }
+.encounter-rows > div { display: grid; grid-template-columns: 64px minmax(50px, 1fr) 52px minmax(110px, 1fr); align-items: center; gap: 9px; font-size: 12px; }
+.encounter-rows .bar { width: 100%; }
+.encounter-rows small { font-size: 10px; color: var(--dim); }
+.bait-affinities { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.bait-affinity { display: flex; gap: 7px; justify-content: space-between; padding: 4px; background: #71836717; font-size: 10px; }
+.bait-affinity b { font-weight: 400; color: #416443; }
+@media (max-width: 640px) {
+  .start .start-card .keys { columns: 1; }
+  .fishery-grid { grid-template-columns: 1fr; }
+  .fishery-preview { height: 64px; }
+  .encounter-rows > div { grid-template-columns: 55px minmax(40px, 1fr) 46px; }
+  .encounter-rows small { grid-column: 1 / -1; }
+}

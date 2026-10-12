@@ -1,0 +1,69 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null && request.auth.token.firebase.sign_in_provider == 'google.com'; }
+    function owner(uid) { return signedIn() && request.auth.uid == uid; }
+    function profile(uid) { return get(/databases/$(database)/documents/players/$(uid)).data; }
+    function validName(name) { return name is string && name.matches('^[가-힣a-zA-Z0-9_]{2,12}$'); }
+    function validMap(map) { return map in ['willow', 'lotus', 'moon', 'gold']; }
+    function validSpecies(id) { return id in ['crucian', 'carp', 'mirror', 'bluegill', 'catfish', 'yellowcat', 'snakehead', 'mandarin', 'bass']; }
+    function maxLength(id) { return {'crucian':46, 'carp':110, 'mirror':90, 'bluegill':25, 'catfish':115, 'yellowcat':42, 'snakehead':110, 'mandarin':65, 'bass':65}[id]; }
+    function validProfile(uid) {
+      let d = request.resource.data;
+      return owner(uid) && d.keys().hasOnly(['uid','nickname','nicknameKey','createdAt','updatedAt','lastChatAt','lastMessageId'])
+        && d.uid == uid && validName(d.nickname) && d.nicknameKey == d.nickname.lower()
+        && (!('lastMessageId' in d) || (d.lastMessageId is string && d.lastMessageId.size() <= 40))
+        && d.updatedAt == request.time
+        && getAfter(/databases/$(database)/documents/nicknames/$(d.nicknameKey)).data.uid == uid;
+    }
+    match /players/{uid} {
+      allow get: if owner(uid);
+      allow list, delete: if false;
+      allow create: if validProfile(uid) && request.resource.data.createdAt == request.time && !('lastChatAt' in request.resource.data);
+      allow update: if validProfile(uid) && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nickname','nicknameKey','updatedAt','lastChatAt','lastMessageId'])
+        && (!('lastChatAt' in resource.data) || ('lastChatAt' in request.resource.data))
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['lastChatAt']) || request.resource.data.lastChatAt == request.time);
+    }
+    match /nicknames/{key} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create, update: if signedIn() && request.resource.data.keys().hasOnly(['uid','nickname'])
+        && request.resource.data.uid == request.auth.uid && validName(request.resource.data.nickname)
+        && key == request.resource.data.nickname.lower()
+        && (!exists(/databases/$(database)/documents/nicknames/$(key)) || resource.data.uid == request.auth.uid)
+        && getAfter(/databases/$(database)/documents/players/$(request.auth.uid)).data.nicknameKey == key;
+      allow delete: if owner(resource.data.uid)
+        && getAfter(/databases/$(database)/documents/players/$(request.auth.uid)).data.nicknameKey != key;
+    }
+    match /rooms/{map}/messages/{id} {
+      allow get: if signedIn() && validMap(map);
+      allow list: if signedIn() && validMap(map) && request.query.limit != null && request.query.limit <= 50;
+      allow create: if signedIn() && validMap(map)
+        && request.resource.data.keys().hasOnly(['uid','nickname','text','createdAt'])
+        && request.resource.data.uid == request.auth.uid && request.resource.data.nickname == profile(request.auth.uid).nickname
+        && request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 200
+        && request.resource.data.createdAt == request.time
+        && (!('lastChatAt' in profile(request.auth.uid)) || profile(request.auth.uid).lastChatAt <= request.time - duration.value(3, 's'))
+        && getAfter(/databases/$(database)/documents/players/$(request.auth.uid)).data.lastChatAt == request.time
+        && getAfter(/databases/$(database)/documents/players/$(request.auth.uid)).data.lastMessageId == id;
+      allow update, delete: if false;
+    }
+    match /leaderboards/{scope}/species/{species}/entries/{uid} {
+      allow get: if validSpecies(species) && (scope == 'all' || validMap(scope));
+      allow list: if validSpecies(species) && (scope == 'all' || validMap(scope)) && request.query.limit != null && request.query.limit <= 20;
+      function validEntry() {
+        let d = request.resource.data;
+        return owner(uid) && validSpecies(species) && (scope == 'all' || validMap(scope))
+          && d.keys().hasOnly(['uid','nickname','cm','kg','fisheryId','updatedAt'])
+          && d.uid == uid && d.nickname == profile(uid).nickname
+          && d.cm is number && d.cm >= 6 && d.cm <= maxLength(species)
+          && d.kg is number && d.kg > 0 && d.kg <= 100 && validMap(d.fisheryId)
+          && (scope == 'all' || d.fisheryId == scope) && d.updatedAt == request.time;
+      }
+      allow create: if validEntry();
+      allow update: if validEntry() && request.resource.data.cm >= resource.data.cm;
+      allow delete: if false;
+    }
+  }
+}

@@ -1,0 +1,100 @@
+/* ─────────────────────────────────────────────
+   몰입형 HUD: 화면에는 꼭 필요한 것만.
+   항상: 조준점 · 핫바 · 경험치 줄 · 시계 · 메뉴 버튼 · 살림망 게이지
+   필요할 때: 키 안내 한 줄 · 캐스팅 힘 · 장력계 · 찌 확대 · 대회
+   ───────────────────────────────────────────── */
+
+:root { --hud-glass: #0000004a; --hud-text: #f4f1e6; }
+
+.place:empty { display: none; }
+
+/* 오른쪽 위: 시계와 메뉴 버튼 */
+.corner { position: absolute; top: 12px; right: 12px; display: flex; gap: 6px; align-items: stretch; }
+.corner[hidden] { display: none; }
+.clock { display: flex; align-items: center; gap: 6px; padding: 0 9px; font-size: 11px; color: var(--hud-text); text-shadow: 1px 1px #000; background: var(--hud-glass); }
+.clock b { font-weight: 400; }
+.clock .env-icon { width: 18px; height: 18px; flex: 0 0 18px; }
+.hud-menu { position: relative; display: grid; align-content: center; gap: 4px; width: 34px; height: 34px; padding: 0 9px; background: var(--hud-glass); border: 0; cursor: pointer; }
+.hud-menu:hover { background: #00000077; }
+.hud-menu i { display: block; height: 3px; background: var(--hud-text); box-shadow: 1px 1px #000; }
+.badge { position: absolute; top: -5px; right: -5px; min-width: 15px; padding: 1px 3px; font: inherit; font-style: normal; font-size: 9px; line-height: 1.2; text-align: center; color: #fff; background: #d9503b; border: 1px solid #5b1a10; }
+.badge[hidden] { display: none; }
+
+/* 대회 중일 때만: 위 가운데 한 줄 */
+.tour-pill { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 6px; padding: 5px 10px; font-size: 11px; color: var(--hud-text); text-shadow: 1px 1px #000; background: var(--hud-glass); }
+.tour-pill[hidden] { display: none; }
+.tour-pill svg { width: 16px; height: 16px; image-rendering: pixelated; }
+.tour-pill b { color: #ffd76a; font-weight: 400; }
+
+/* 찌 확대: 찌를 볼 때만, 작게 */
+body.voxel .pip, .pip { top: 54px; right: 12px; width: 108px; height: 140px; border-radius: 0; }
+body.touch .pip { top: 54px; right: 8px; width: 92px; height: 120px; }
+
+/* 키 안내: 할 수 있는 동작이 있을 때만 한 줄 */
+.prompt { position: absolute; left: 50%; bottom: 104px; transform: translateX(-50%); padding: 4px 10px; font-size: 12px; white-space: nowrap; color: var(--hud-text); text-shadow: 1px 1px #000; background: var(--hud-glass); pointer-events: none; }
+.prompt[hidden] { display: none; }
+.prompt kbd { margin-right: 4px; }
+
+/* 알림: 짧고 작게 */
+.toasts { top: 16%; gap: 4px; }
+body.voxel .toast, .toast { padding: 5px 12px; font-size: 12px; font-weight: 400; }
+
+/* 캐스팅 힘: 조준점 아래 가는 막대 */
+body.voxel .power, .power { top: calc(50% + 26px); width: 120px; height: 4px; margin-left: -60px; }
+
+/* 장력계: 막대 두 줄과 위험할 때만 한 줄 */
+body.voxel .fight, .fight { bottom: 104px; width: 240px; margin-left: -120px; padding: 6px 8px; display: grid; gap: 4px; }
+.fight .meter { height: 6px; margin: 0; }
+.fight .meter.rod { height: 4px; }
+.fight-feel { margin: 0; font-size: 10px; text-align: center; }
+.fight-feel:empty { display: none; }
+
+.mc-xp { height: 4px; margin-top: 4px; }
+.mc-xp b { font-size: 11px; bottom: 1px; }
+
+/* 핫바: 글자 대신 상태 점 (주황 깜빡임 입질 · 초록 거치) */
+.hotbar .slot.parked::after { content: ""; position: absolute; right: 4px; top: 4px; width: 6px; height: 6px; box-shadow: 1px 1px #000; }
+.hotbar .slot.parked::after { background: #6fc04a; }
+.hotbar .slot.ghost { opacity: 0.6; }
+
+/* 메뉴 모달 */
+body.voxel .panel.hub, .panel.hub { width: min(560px, calc(100vw - 32px)); }
+.hub-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.hub-lv { display: flex; align-items: center; gap: 10px; flex: 1; }
+.hub-lv b { white-space: nowrap; font-size: 15px; }
+.hub-lv .bar { max-width: 220px; }
+.hub-coins { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; }
+.hub-coins svg { width: 16px; height: 16px; image-rendering: pixelated; }
+.hub-env { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 8px 0 4px; font-size: 11px; color: var(--dim); line-height: 1.7; }
+.hub-env .env-icon { width: 18px; height: 18px; flex: 0 0 18px; }
+.panel.hub section { margin-top: 10px; }
+.panel.hub h3 { margin: 0 0 6px; font-size: 11px; color: var(--dim); }
+.hub-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.hub-tile { position: relative; display: grid; justify-items: center; gap: 3px; padding: 10px 4px 8px; font: inherit; cursor: pointer; color: #293023;
+  background: #aaae98; border: 2px solid #565f48; box-shadow: inset 2px 2px 0 #dfdfcc, inset -2px -2px 0 #79836a; }
+.hub-tile:hover { background: #c3cca5; }
+.hub-tile .slot-art { width: 28px; height: 28px; }
+.hub-tile b { font-size: 11px; font-weight: 400; }
+.hub-tile small { font-size: 9px; color: #4e5644; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hub-tile kbd { position: absolute; top: 3px; left: 3px; padding: 0 3px; font-size: 8px; }
+.hub-help { margin-top: 12px; font-size: 11px; }
+.hub-help summary { cursor: pointer; color: var(--dim); }
+.hub-help ul { margin: 8px 0 0; padding-left: 16px; line-height: 2; }
+
+/* 터치: 버튼이 손가락 크기 */
+body.touch .hud-menu { width: 42px; height: 42px; padding: 0 11px; }
+body.touch .prompt { bottom: 78px; }
+body.touch .fight { bottom: 70px; }
+@media (max-width: 700px) { .hub-grid { grid-template-columns: repeat(2, 1fr); } }
+
+/* 살림망 게이지 (왼쪽 위): 고리가 무게만큼 차고, 가운데에 마리 수 */
+.net-gauge { position: absolute; top: 12px; left: 12px; width: 64px; height: 64px; padding: 0; border: 0; border-radius: 50%; cursor: pointer;
+  background: conic-gradient(#ece7d4 var(--p, 0deg), #ffffff2e 0); box-shadow: 0 1px 4px #0007; }
+.net-gauge.full { background: conic-gradient(#e0644a var(--p, 0deg), #ffffff2e 0); }
+.net-gauge[hidden] { display: none; }
+.ng-in { position: absolute; inset: 4px; display: grid; place-content: center; justify-items: center; border-radius: 50%; color: var(--hud-text); background: #2a3032e0; }
+.ng-in svg { width: 20px; height: 12px; opacity: 0.85; }
+.ng-in b { font-size: 13px; font-weight: 400; line-height: 1.15; }
+.ng-in small { font-size: 8px; line-height: 1; color: #c9c6b8; }
+body.voxel .place, .place { top: 84px; left: 12px; }
+body.touch .net-gauge { top: 8px; left: 8px; width: 56px; height: 56px; }
