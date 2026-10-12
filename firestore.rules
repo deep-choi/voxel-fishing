@@ -14,8 +14,8 @@ service cloud.firestore {
       return openMap(map) && validSlot(slot) && seat.uid == request.auth.uid && seat.sessionId == session
         && seat.updatedAt > request.time - duration.value(150, 's');
     }
-    function validSpecies(id) { return id in ['crucian', 'carp', 'mirror', 'bluegill', 'catfish', 'yellowcat', 'snakehead', 'mandarin', 'bass']; }
-    function maxLength(id) { return {'crucian':55, 'carp':110, 'mirror':90, 'bluegill':25, 'catfish':115, 'yellowcat':42, 'snakehead':110, 'mandarin':65, 'bass':65}[id]; }
+    function validSpecies(id) { return id in ['crucian', 'carp', 'mirror', 'bluegill', 'catfish', 'yellowcat', 'snakehead', 'mandarin', 'bass', 'hera', 'nuchi', 'koi', 'leather', 'bredmirror', 'grasscarp']; }
+    function maxLength(id) { return {'crucian':55, 'carp':110, 'mirror':90, 'bluegill':25, 'catfish':115, 'yellowcat':42, 'snakehead':110, 'mandarin':65, 'bass':65, 'hera':60, 'nuchi':75, 'koi':100, 'leather':100, 'bredmirror':100, 'grasscarp':110}[id]; }
     function validProfile(uid) {
       let d = request.resource.data;
       return owner(uid) && d.keys().hasOnly(['uid','nickname','nicknameKey','createdAt','updatedAt','lastChatAt','lastMessageId'])

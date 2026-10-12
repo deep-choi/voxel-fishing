@@ -3,6 +3,7 @@ import { ACTIVE_FISHERY } from './fisheries';
 import type { BaitProduct } from './realCatalog';
 import { smoothstep } from '../world/noise';
 import { baitPresentation, hookAcceptance, lineAcceptance, sensitivityAcceptance } from './rigMechanics';
+import { productAffinity } from './speciesFamilies';
 
 /** 실제 효능을 주장하지 않는 게임 먹이 모델. 기본 선호도는 Species.baits에 한 번만 정의한다. */
 const PRODUCT_TARGETS: Record<string, Partial<Record<SpeciesId, number>>> = {
@@ -19,7 +20,7 @@ const PRODUCT_TARGETS: Record<string, Partial<Record<SpeciesId, number>>> = {
 export function baitAffinity(sp: Species, bait: BaitId, product?: BaitProduct) {
   const preference = sp.baits[bait];
   // 거의 먹지 않는 곡물 미끼로 포식자를 만능 공략하지 못한다.
-  const productPreference = product ? product.speciesAffinity?.[sp.id] ?? PRODUCT_TARGETS[product.id]?.[sp.id] ?? 1 : 1;
+  const productPreference = product ? productAffinity(product.speciesAffinity ?? PRODUCT_TARGETS[product.id], sp.id) : 1;
   return preference < 0.06 ? 0 : preference ** 1.8 * productPreference;
 }
 export const preferredBaits = (sp: Species) => Object.values(BAITS).sort((a, b) => sp.baits[b.id] - sp.baits[a.id]);

@@ -21,8 +21,8 @@ const ROD_SERIES: RodSeries[] = [
     desc: '먼 포인트에 닿는 장거리대. 긴 원줄을 쓰지만 같은 가격의 강공대보다 제압력이 낮다',
     stages: [[7.2, 8.4, 3.1, 1.4, 800], [7.92, 9.6, 3.8, 1.65, 2900], [8.64, 10.8, 4.5, 1.9, 8900], [9.36, 12, 5.2, 2.15, 24500]] },
   { id: 'force', name: '철심', purpose: '대물 · 강공 제압', action: 0.86,
-    desc: '짧은 거리에서 대물을 제압하는 경질대. 휨이 적어 가는 줄에는 돌진 충격이 크게 전해진다',
-    stages: [[5.4, 5.1, 4.2, 0.95, 950], [5.58, 5.3, 5.4, 1.05, 3400], [5.76, 5.5, 6.8, 1.2, 10800], [5.94, 5.7, 8.2, 1.35, 28500]] },
+    desc: '짧은 거리에서 대물을 제압하는 경질대. 상위 단계는 초대물 장력용이며 굵은 원줄·강축바늘을 함께 써야 한다. 하중은 게임 전용 수치',
+    stages: [[5.4, 5.1, 6, 1.1, 950], [5.58, 5.3, 11, 1.35, 3400], [5.76, 5.5, 20, 1.65, 10800], [5.94, 5.7, 30, 2.0, 28500]] },
   { id: 'allround', name: '가온', purpose: '붕어·잉어 · 균형', action: 0.58,
     desc: '사거리와 완충, 제압력의 균형을 맞춘 다용도대. 전문 계열의 최대 성능에는 미치지 않는다',
     stages: [[5.76, 5.5, 3.2, 1.4, 580], [6.12, 5.9, 4.0, 1.6, 2250], [6.48, 6.3, 4.9, 1.8, 7400], [6.84, 6.7, 5.8, 2.0, 20500]] },
@@ -32,6 +32,24 @@ export const EXPANDED_RODS: RodSpec[] = ROD_SERIES.flatMap(series => series.stag
   ...meta(i, series.purpose), desc: series.desc,
 })));
 export const EXPANDED_ROD_ACTION: Record<string, number> = Object.fromEntries(ROD_SERIES.flatMap(series => series.stages.map((_, i) => [`willow-${series.id}-${i + 1}`, series.action])));
+
+// 한 계열을 최고 수치로 통일하지 않고 낚시 거리와 완충 방식으로 선택하는 전용대.
+EXPANDED_RODS.push(
+  { id: 'willow-special-shore-1', name: '버들못 샛물 연안단대', length: 3.6, line: 3.3, power: 2.8, flex: 1.3, price: 720, level: 3, rarity: 'uncommon', purpose: '연안 · 짧은 거리', desc: '좌대 바로 앞과 가까운 수초 가장자리용 짧은 대. 먼 포인트에 닿지 못한다' },
+  { id: 'willow-special-shore-2', name: '버들못 샛물 정밀단대', length: 4.14, line: 3.8, power: 3.4, flex: 1.65, price: 4600, level: 7, rarity: 'epic', purpose: '연안 · 짧은 거리', desc: '연안단대의 완충과 제압력을 보강했다. 짧은 원줄로 가까운 붕어 포인트를 노린다' },
+  { id: 'willow-special-reach-1', name: '버들못 수평선 장거리대', length: 8.1, line: 10, power: 5, flex: 1.9, price: 5300, level: 6, rarity: 'rare', purpose: '장거리 · 깊은 수심', desc: '먼 수심 변화를 노리는 10m 원줄 채비. 같은 가격의 강공대보다 제압력이 작다' },
+  { id: 'willow-special-reach-2', name: '버들못 수평선 극장대', length: 9.9, line: 13, power: 7, flex: 2.2, price: 24000, level: 12, rarity: 'legendary', purpose: '장거리 · 깊은 수심', desc: '13m 원줄로 멀고 깊은 곳에 닿는다. 초대물 제압용 짧은 강공대와 쓰임이 다르다' },
+  { id: 'willow-special-soft-1', name: '버들못 유연 완충대', length: 5.4, line: 5.1, power: 4, flex: 2.3, price: 3700, level: 5, rarity: 'rare', purpose: '가는 줄 · 연질 완충', desc: '허리까지 휘며 2.3m를 받아 주는 완충대. 가는 원줄에 유리하지만 강제로 당기는 힘은 작다' },
+  { id: 'willow-special-soft-2', name: '버들못 유연 심곡대', length: 6.3, line: 6, power: 7, flex: 3.0, price: 17000, level: 10, rarity: 'legendary', purpose: '가는 줄 · 연질 완충', desc: '깊은 휨과 3m 완충 거리로 급한 돌진을 받는다. 초대물 강공대보다 최대 하중은 낮다' },
+  { id: 'willow-special-heavy-1', name: '버들못 거산 초대물대', length: 5.76, line: 5.5, power: 24, flex: 1.8, price: 16800, level: 10, rarity: 'epic', purpose: '초대물 · 강공', desc: '굵은 카본·합사와 강축바늘을 쓰는 초대물 전용. 짧은 사거리와 큰 하중의 게임 채비' },
+  { id: 'willow-special-heavy-2', name: '버들못 거산 명장강공대', length: 6.12, line: 5.9, power: 32, flex: 2.2, price: 30000, level: 12, rarity: 'legendary', purpose: '초대물 · 강공', desc: '32kgf 제압력의 초대물 전용대. 약한 줄·바늘을 함께 쓰면 그 부품부터 손상된다. 수치는 게임 규격' },
+);
+Object.assign(EXPANDED_ROD_ACTION, {
+  'willow-special-shore-1': 0.35, 'willow-special-shore-2': 0.32,
+  'willow-special-reach-1': 0.55, 'willow-special-reach-2': 0.58,
+  'willow-special-soft-1': 0.18, 'willow-special-soft-2': 0.12,
+  'willow-special-heavy-1': 0.84, 'willow-special-heavy-2': 0.88,
+});
 
 interface LineSeries {
   id: string; name: string; go: string; diameterMm: number; purpose: string; desc: string;
@@ -49,13 +67,44 @@ const LINE_SERIES: LineSeries[] = [
     desc: '중형어의 돌진을 버티는 균형 원줄. 극세 원줄보다 굵어 예민한 입질은 줄어든다',
     stages: [[4.4, 0.24, 260], [5.5, 0.19, 1350], [6.8, 0.14, 4200], [8.1, 0.10, 10500]] },
   { id: 'armorline', name: '강벽 대물', go: '5', diameterMm: 0.37, purpose: '대물 · 강도 우선',
-    desc: '대물 전용 굵은 원줄. 상위 제품도 줄의 굵기 때문에 경계심과 채비 둔화가 남는다',
+    desc: '중간 하중의 대물용 모노 원줄. 초대물의 최대 돌진에는 초대물 카본·합사 계열이 필요하며 굵기에 따른 경계심과 채비 둔화가 남는다',
     stages: [[8.0, 0.50, 520], [10.1, 0.44, 2150], [12.4, 0.38, 5900], [14.8, 0.32, 12500]] },
 ];
 export const EXPANDED_LINES: LineSpec[] = LINE_SERIES.flatMap(series => series.stages.map(([strength, visibility, price], i) => ({
   id: `willow-${series.id}-${i + 1}`, name: `버들못 ${series.name} ${STAGES[i]} ${series.go}호`, diameterMm: series.diameterMm,
-  strength, visibility, price, ...meta(i, series.purpose), desc: series.desc,
+  material: 'nylon', strength, visibility, price, ...meta(i, series.purpose), desc: series.desc,
 })));
+
+// 기존 32개 원줄 뒤에 추가한다. 아래 하중·직경·호수 환산은 게임 규격이다.
+// 초대물 줄은 강도가 높은 만큼 굵기·가시성·가격 부담을 함께 높인다.
+EXPANDED_LINES.push(
+  ...[
+    // 호수, 굵기, 강도, 가시성, 가격
+    [6, 0.405, 14, 0.38, 2500], [8, 0.47, 22, 0.34, 6500],
+    [10, 0.52, 31, 0.30, 14000], [12, 0.57, 42, 0.26, 28000],
+  ].map(([go, diameterMm, strength, visibility, price], i): LineSpec => ({
+    id: `willow-deepcarbon-${i + 1}`, name: `버들못 심층 카본 ${STAGES[i]} ${go}호`,
+    material: 'fluorocarbon', diameterMm, strength, visibility, price,
+    ...meta(i, '초대물 · 카본'),
+    desc: '물속에서 덜 눈에 띄는 굵은 카본 원줄. 무겁고 뻣뻣해 섬세한 채비에는 불리하다. 강도·굵기는 게임 전용 수치',
+  })),
+  ...[
+    [3, 0.285, 16, 0.60, 2100], [4, 0.33, 25, 0.65, 5900],
+    [6, 0.405, 36, 0.70, 13500], [8, 0.47, 45, 0.75, 26500],
+  ].map(([go, diameterMm, strength, visibility, price], i): LineSpec => ({
+    id: `willow-titanbraid-${i + 1}`, name: `버들못 거암 합사 ${STAGES[i]} PE ${go}호`,
+    material: 'braid', diameterMm, strength, visibility, price,
+    ...meta(i, '초대물 · 저신축 합사'),
+    desc: '굵기 대비 강도가 높은 저신축 합사. 눈에 잘 띄고 돌진 충격을 직접 전달하므로 대와 바늘도 강해야 한다. PE 호수·굵기·하중은 게임 규격',
+  })),
+);
+// 소형·중형용 가는 카본/합사. 같은 재질의 초대물 줄과 굵기·강도를 분리한다.
+EXPANDED_LINES.push(
+  { id: 'willow-clearcarbon-1', name: '버들못 청명 실용카본 1.5호', material: 'fluorocarbon', diameterMm: 0.205, strength: 3.4, visibility: 0.01, price: 680, level: 3, rarity: 'uncommon', purpose: '붕어 · 가는 카본', desc: '경계심 높은 붕어용 가는 카본. 눈에 덜 띄지만 모노보다 뻣뻣하고 큰 돌진에는 약하다' },
+  { id: 'willow-clearcarbon-2', name: '버들못 청명 고급카본 2호', material: 'fluorocarbon', diameterMm: 0.235, strength: 5.2, visibility: 0.025, price: 1750, level: 5, rarity: 'rare', purpose: '붕어·중형어 · 카본', desc: '가는 카본에서 강도를 높인 중소형어용. 대물 전용 카본보다 가늘고 약하다' },
+  { id: 'willow-finebraid-1', name: '버들못 실안개 실용합사 PE 0.6호', material: 'braid', diameterMm: 0.128, strength: 5.5, visibility: 0.32, price: 1100, level: 4, rarity: 'uncommon', purpose: '가는 합사 · 직접 전달', desc: '가늘고 늘어남이 적어 반응을 직접 전달한다. 카본보다 잘 보이며 돌진 충격을 잘 흡수하지 못한다. PE 굵기는 게임 환산값' },
+  { id: 'willow-finebraid-2', name: '버들못 실안개 고급합사 PE 1호', material: 'braid', diameterMm: 0.165, strength: 8, visibility: 0.38, price: 2700, level: 6, rarity: 'rare', purpose: '중형어 · 저신축 합사', desc: '중형어용 가는 합사. 초대물 합사보다 경계심 부담은 작지만 충격을 낚싯대와 바늘에 그대로 전달한다. 게임 규격' },
+);
 
 interface HookSeries {
   id: string; name: string; go: number; gapMm: number; purpose: string; desc: string;
@@ -73,8 +122,8 @@ const HOOK_SERIES: HookSeries[] = [
     desc: '옥수수와 어분을 사용하는 중형 잉어용. 입이 작은 붕어에게는 삼키기 어려운 크기다',
     stages: [[1.22, 0.94, 230], [1.42, 0.98, 1100], [1.62, 1.02, 3500], [1.82, 1.06, 9200]] },
   { id: 'ironhook', name: '철각 강축', go: 12, gapMm: 11, purpose: '대물 · 큰 미끼',
-    desc: '큰 잉어·메기용 넓고 강한 바늘. 상위 제품도 작은 물고기의 흡입에는 불리하다',
-    stages: [[1.52, 0.74, 390], [1.76, 0.78, 1650], [2.00, 0.82, 4700], [2.24, 0.86, 11000]] },
+    desc: '큰 잉어·메기용 넓고 강한 바늘. 정밀·명장 단계는 초대물 장력용이지만 작은 입에는 불리하다. 유지력과 하중은 게임 전용 수치',
+    stages: [[2.0, 0.74, 390], [3.5, 0.78, 1650], [5.5, 0.82, 4700], [9.0, 0.86, 11000]] },
 ];
 export const EXPANDED_HOOKS: HookSpec[] = HOOK_SERIES.flatMap(series => series.stages.map(([hold, attraction, price], i) => ({
   id: `willow-${series.id}-${i + 1}`, name: `버들못 ${series.name} ${STAGES[i]} ${series.go}호`, gapMm: series.gapMm,

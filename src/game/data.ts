@@ -1,13 +1,16 @@
 import { createExtraSpecies } from './extraSpecies';
+import { createExpandedSpecies } from './speciesExpansion';
 import { SIZE_RANKS } from './sizeRanks';
 import { EXPANDED_FLOATS, EXPANDED_HOOKS, EXPANDED_LINES, EXPANDED_RODS, EXPANDED_ROD_ACTION } from './gearExpansion';
+import { SPECIALIST_HOOKS } from './hookCatalog';
 import { FISH_LOOKS, type FishLook } from './fishArt';
 export type { FishLook } from './fishArt';
 // 어종과 채비 데이터. 수심·출현율·장비 수치는 게임 밸런스다.
 
 export type BaitId = 'worm' | 'paste' | 'corn' | 'gluten' | 'pellet' | 'shrimp';
 export type ExtraSpeciesId = 'catfish' | 'yellowcat' | 'snakehead' | 'mandarin' | 'bass';
-export type SpeciesId = 'crucian' | 'carp' | 'mirror' | 'bluegill' | ExtraSpeciesId;
+export type ExpandedSpeciesId = 'hera' | 'nuchi' | 'koi' | 'leather' | 'bredmirror' | 'grasscarp';
+export type SpeciesId = 'crucian' | 'carp' | 'mirror' | 'bluegill' | ExtraSpeciesId | ExpandedSpeciesId;
 /** 입질 모양: 붕어 찌올림 / 잉어 끌고 들어감 / 블루길 깔짝깔짝 */
 export type BiteStyle = 'rise' | 'sink' | 'jitter' | 'drag' | 'dart';
 
@@ -34,9 +37,11 @@ export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
 /** 상점·가방에서 공통으로 쓰는 등급과 해금 레벨 */
 export interface GearMeta { rarity: Rarity; level: number; purpose?: string }
 
+export type LineMaterial = 'nylon' | 'fluorocarbon' | 'braid';
 export interface LineSpec extends GearMeta {
   id: string;
   name: string;
+  material: LineMaterial;
   /** 끊어지는 힘 (kgf) */
   strength: number;
   /** 줄이 굵을수록 예민한 물고기가 덜 문다 (어종별 shy와 곱해짐) */
@@ -50,20 +55,20 @@ export interface LineSpec extends GearMeta {
 // 순서가 저장된 lineIdx와 이어지므로 새 원줄은 뒤에 붙인다.
 // 실제 모델명·출처는 realCatalog.ts. 가격·하중·길이는 게임 규격이다.
 export const LINES: LineSpec[] = [
-  { id: '1.5', name: '선라인 헤라 원줄 노즈리 1.5호', strength: 2.7, visibility: 0, price: 0, level: 1, rarity: 'common', desc: '가늘어 예민한 붕어도 잘 문다' },
-  { id: '2', name: '선라인 헤라 원줄 노즈리 2호', strength: 3.6, visibility: 0.12, price: 0, level: 1, rarity: 'common', desc: '붕어 찌낚시 기본 원줄' },
-  { id: '3', name: '선라인 헤라 원줄 노즈리 3호', strength: 5.4, visibility: 0.3, price: 120, level: 2, rarity: 'common', desc: '잉어가 섞이는 자리용' },
-  { id: '4', name: '선라인 토네이도 V하드 4호', strength: 7.2, visibility: 0.45, price: 240, level: 4, rarity: 'uncommon', desc: '대물 잉어·가물치를 버틴다' },
-  { id: 'c2', name: '선라인 토네이도 V하드 2호', strength: 4.1, visibility: 0.04, price: 600, level: 5, rarity: 'rare', desc: '물속에서 잘 안 보이고 빨리 가라앉는다' },
-  { id: 'c3', name: '선라인 토네이도 V하드 3호', strength: 6.3, visibility: 0.14, price: 1100, level: 7, rarity: 'epic', desc: '굵기 대비 질기고 눈에 덜 띈다' },
+  { id: '1.5', name: '선라인 헤라 원줄 노즈리 1.5호', strength: 2.7, material: 'nylon', visibility: 0, price: 0, level: 1, rarity: 'common', desc: '가늘어 예민한 붕어도 잘 문다' },
+  { id: '2', name: '선라인 헤라 원줄 노즈리 2호', strength: 3.6, material: 'nylon', visibility: 0.12, price: 0, level: 1, rarity: 'common', desc: '붕어 찌낚시 기본 원줄' },
+  { id: '3', name: '선라인 헤라 원줄 노즈리 3호', strength: 5.4, material: 'nylon', visibility: 0.3, price: 120, level: 2, rarity: 'common', desc: '잉어가 섞이는 자리용' },
+  { id: '4', name: '선라인 토네이도 V하드 4호', strength: 7.2, material: 'fluorocarbon', visibility: 0.45, price: 240, level: 4, rarity: 'rare', desc: '대물 잉어·가물치를 버틴다' },
+  { id: 'c2', name: '선라인 토네이도 V하드 2호', strength: 4.1, material: 'fluorocarbon', visibility: 0.04, price: 600, level: 5, rarity: 'rare', desc: '물속에서 잘 안 보이고 빨리 가라앉는다' },
+  { id: 'c3', name: '선라인 토네이도 V하드 3호', strength: 6.3, material: 'fluorocarbon', visibility: 0.14, price: 1100, level: 7, rarity: 'rare', desc: '굵기 대비 질기고 눈에 덜 띈다' },
 ];
 
 LINES.push(
-  { id: 'n1', name: '선라인 헤라 원줄 노즈리 1호', strength: 1.9, visibility: 0, price: 80, level: 1, rarity: 'common', desc: '얕은 물의 예민한 붕어용. 큰 잉어에는 조심' },
-  { id: 'n25', name: '선라인 헤라 원줄 노즈리 2.5호', strength: 4.5, visibility: 0.2, price: 200, level: 2, rarity: 'uncommon', desc: '붕어와 중형 잉어 사이의 균형' },
-  { id: 'herabito', name: '선라인 헤라비토 원줄', strength: 4.2, visibility: 0.09, price: 480, level: 3, rarity: 'rare', desc: '민물 헤라 원줄. 게임에서는 예민한 붕어와 중형어에 맞춤' },
-  { id: 'fc15', name: '선라인 토네이도 V하드 1.5호', strength: 3.1, visibility: 0.01, price: 440, level: 3, rarity: 'rare', desc: '플루오로카본 목줄을 게임의 공용줄로 사용' },
-  { id: 'fc4', name: '선라인 토네이도 V하드 4호 대물 채비', strength: 8.6, visibility: 0.24, price: 1600, level: 8, rarity: 'epic', desc: '같은 실제 모델의 게임 대물 세팅. 하중은 게임 수치' },
+  { id: 'n1', name: '선라인 헤라 원줄 노즈리 1호', strength: 1.9, material: 'nylon', visibility: 0, price: 80, level: 1, rarity: 'common', desc: '얕은 물의 예민한 붕어용. 큰 잉어에는 조심' },
+  { id: 'n25', name: '선라인 헤라 원줄 노즈리 2.5호', strength: 4.5, material: 'nylon', visibility: 0.2, price: 200, level: 2, rarity: 'common', desc: '붕어와 중형 잉어 사이의 균형' },
+  { id: 'herabito', name: '선라인 헤라비토 원줄', strength: 4.2, material: 'nylon', visibility: 0.09, price: 480, level: 3, rarity: 'rare', desc: '민물 헤라 원줄. 게임에서는 예민한 붕어와 중형어에 맞춤' },
+  { id: 'fc15', name: '선라인 토네이도 V하드 1.5호', strength: 3.1, material: 'fluorocarbon', visibility: 0.01, price: 440, level: 3, rarity: 'rare', desc: '플루오로카본 목줄을 게임의 공용줄로 사용' },
+  { id: 'fc4', name: '선라인 토네이도 V하드 4호 대물 채비', strength: 8.6, material: 'fluorocarbon', visibility: 0.24, price: 1600, level: 8, rarity: 'rare', desc: '같은 실제 모델의 게임 대물 세팅. 하중은 게임 수치' },
 );
 
 /** 민장대 (릴 없는 붕어 찌낚싯대). 게임에서 1칸 = 1.8m */
@@ -127,13 +132,16 @@ export function floatTraits(f: FloatSpec) {
   return [`찌톱 ${f.notches ?? 10}마디`, `예민함 ${f.sensitivity}`, sway < 0.95 ? '물결에 강함' : sway > 1.05 ? '물결에 약함' : '',
     f.light === 'electro' ? (f.shift ? '변색 LED' : 'LED 발광') : f.light === 'chemi' ? '케미 발광' : ''].filter(Boolean).join(' · ');
 }
-export interface HookSpec extends GearMeta { id: string; name: string; hold: number; attraction: number; price: number; desc: string; gapMm?: number }
+export interface HookSpec extends GearMeta {
+  id: string; name: string; hold: number; attraction: number; price: number; desc: string; gapMm?: number;
+  shape?: 'fine' | 'round' | 'long' | 'wide'; wireMm?: number; barbed?: boolean; sharpness?: number;
+}
 export const HOOKS: HookSpec[] = [
-  { id: 'small', name: '오너 OH 갈색 헤라 개량스레 5호', hold: 0.9, attraction: 1.1, price: 0, level: 1, rarity: 'common', desc: '붕어와 작은 물고기에게 유리' },
-  { id: 'medium', name: '가마카츠 이세니 7호', hold: 1.15, attraction: 1, price: 160, level: 2, rarity: 'common', desc: '붕어와 잉어를 함께 노린다' },
-  { id: 'large', name: '가마카츠 이세니 10호', hold: 1.5, attraction: 0.8, price: 280, level: 4, rarity: 'uncommon', desc: '큰 물고기를 단단히 걸지만 잔챙이 입질은 줄어든다' },
-  { id: 'sharp', name: '오너 OH 갈색 헤라 개량스레 4호', hold: 1.1, attraction: 1.25, price: 520, level: 5, rarity: 'rare', desc: '바늘 끝이 날카로워 약한 입질에도 박힌다' },
-  { id: 'monster', name: '가마카츠 이세니 13호', hold: 1.9, attraction: 0.72, price: 1500, level: 8, rarity: 'epic', desc: '메기·가물치 대물도 빠지지 않는다' },
+  { id: 'small', name: '오너 OH 갈색 헤라 개량스레 5호', hold: 0.9, attraction: 1.1, price: 0, level: 1, rarity: 'uncommon', desc: '붕어와 작은 물고기에게 유리' },
+  { id: 'medium', name: '가마카츠 이세니 7호', hold: 1.15, attraction: 1, price: 160, level: 1, rarity: 'uncommon', desc: '붕어와 잉어를 함께 노린다' },
+  { id: 'large', name: '가마카츠 이세니 10호', hold: 1.5, attraction: 0.8, price: 280, level: 1, rarity: 'uncommon', desc: '큰 물고기를 단단히 걸지만 잔챙이 입질은 줄어든다' },
+  { id: 'sharp', name: '오너 OH 갈색 헤라 개량스레 4호', hold: 1.1, attraction: 1.25, price: 90, level: 1, rarity: 'uncommon', desc: '폭이 작아 작은 입의 붕어와 글루텐 떡밥에 맞는 무미늘 바늘' },
+  { id: 'monster', name: '가마카츠 이세니 13호', hold: 1.9, attraction: 0.72, price: 400, level: 1, rarity: 'uncommon', desc: '큰 미끼를 다는 메기·가물치용. 작은 물고기는 삼키기 어렵다' },
 ];
 export const BAIT_PACKS = [
   { id: 'worm', name: '지렁이 10마리', count: 10, price: 30 },
@@ -153,9 +161,9 @@ RODS.push(
   { id: 'mugung', name: '바낙스 무궁 MASTER 초경', length: 7.2, line: 8.2, power: 5.6, flex: 1.75, price: 3900, level: 8, rarity: 'epic', desc: '게임 4.0칸. 깊은 좌대에서 큰 고기를 제압한다' },
 );
 HOOKS.push(
-  { id: 'ise5', name: '가마카츠 이세니 5호', hold: 1.02, attraction: 1.12, price: 110, level: 1, rarity: 'common', desc: '작은 미끼로 붕어와 중형어를 노린다' },
-  { id: 'ise9', name: '가마카츠 이세니 9호', hold: 1.4, attraction: 0.9, price: 360, level: 3, rarity: 'uncommon', desc: '옥수수·어분 채비로 잉어를 노린다' },
-  { id: 'owner7', name: '오너 OH 갈색 헤라 개량스레 7호', hold: 1.25, attraction: 1.08, price: 340, level: 3, rarity: 'rare', desc: '글루텐 떡밥을 사용하는 민물 찌낚시용' },
+  { id: 'ise5', name: '가마카츠 이세니 5호', hold: 1.02, attraction: 1.12, price: 110, level: 1, rarity: 'uncommon', desc: '작은 미끼로 붕어와 중형어를 노린다' },
+  { id: 'ise9', name: '가마카츠 이세니 9호', hold: 1.4, attraction: 0.9, price: 230, level: 1, rarity: 'uncommon', desc: '옥수수·어분 채비로 잉어를 노린다' },
+  { id: 'owner7', name: '오너 OH 갈색 헤라 개량스레 7호', hold: 1.25, attraction: 1.08, price: 140, level: 1, rarity: 'uncommon', desc: '글루텐 떡밥을 사용하는 민물 찌낚시용' },
 );
 FLOATS.push({ id: 'ha566', name: '해동 HA-566 내림찌', shape: 'slim', notches: 13, sway: 1.2, sensitivity: 1.3, sinkSpeed: 0.55, scale: 0.85, price: 280, level: 2, rarity: 'uncommon', desc: '내림 붕어낚시 채비세트의 찌를 게임에서 단독 장착' });
 
@@ -170,11 +178,11 @@ RODS.push(
 );
 Object.assign(ROD_ACTION, { 'willow-soft': 0.3, 'willow-finesse': 0.25, 'willow-guard': 0.88, 'willow-master': 0.18 });
 LINES.push(
-  { id: 'willow-entry', name: '버들못 실속 원줄 2.5호', diameterMm: 0.26, strength: 3.9, visibility: 0.22, price: 100, level: 1, rarity: 'common', desc: '저렴한 중간 굵기. 예민한 붕어보다 일반 낚시에 알맞다' },
-  { id: 'willow-silk', name: '버들못 세사 원줄 0.8호', diameterMm: 0.145, strength: 1.8, visibility: 0, price: 300, level: 2, rarity: 'uncommon', desc: '매우 가늘어 섬세한 채비에 적합. 작은 하중에도 끊어지니 큰 고기는 피한다' },
-  { id: 'willow-balance', name: '버들못 정밀 원줄 1.7호', diameterMm: 0.22, strength: 4.5, visibility: 0.08, price: 850, level: 5, rarity: 'rare', desc: '붕어와 중형 잉어 사이의 균형. 초대물용 강도는 없다' },
-  { id: 'willow-heavy', name: '버들못 강공 원줄 6호', diameterMm: 0.405, strength: 10.5, visibility: 0.55, price: 2100, level: 8, rarity: 'epic', desc: '대물의 힘을 버티는 굵은 줄. 경계심 높은 고기의 입질과 채비 예민함은 줄어든다' },
-  { id: 'willow-master', name: '버들못 명인 세사 원줄 1호', diameterMm: 0.165, strength: 3.0, visibility: 0, price: 3300, level: 10, rarity: 'legendary', desc: '얇은 줄의 강도를 보강한 붕어용. 굵은 대물 원줄보다 버티는 힘은 낮다' },
+  { id: 'willow-entry', name: '버들못 실속 원줄 2.5호', diameterMm: 0.26, strength: 3.9, material: 'nylon', visibility: 0.22, price: 100, level: 1, rarity: 'common', desc: '저렴한 중간 굵기. 예민한 붕어보다 일반 낚시에 알맞다' },
+  { id: 'willow-silk', name: '버들못 세사 원줄 0.8호', diameterMm: 0.145, strength: 1.8, material: 'nylon', visibility: 0, price: 300, level: 2, rarity: 'uncommon', desc: '매우 가늘어 섬세한 채비에 적합. 작은 하중에도 끊어지니 큰 고기는 피한다' },
+  { id: 'willow-balance', name: '버들못 정밀 원줄 1.7호', diameterMm: 0.22, strength: 4.5, material: 'nylon', visibility: 0.08, price: 850, level: 5, rarity: 'rare', desc: '붕어와 중형 잉어 사이의 균형. 초대물용 강도는 없다' },
+  { id: 'willow-heavy', name: '버들못 강공 원줄 6호', diameterMm: 0.405, strength: 10.5, material: 'nylon', visibility: 0.55, price: 2100, level: 8, rarity: 'epic', desc: '대물의 힘을 버티는 굵은 줄. 경계심 높은 고기의 입질과 채비 예민함은 줄어든다' },
+  { id: 'willow-master', name: '버들못 명인 세사 원줄 1호', diameterMm: 0.165, strength: 3.0, material: 'nylon', visibility: 0, price: 3300, level: 10, rarity: 'legendary', desc: '얇은 줄의 강도를 보강한 붕어용. 굵은 대물 원줄보다 버티는 힘은 낮다' },
 );
 HOOKS.push(
   { id: 'willow-entry', name: '버들못 실속 붕어바늘 5호', gapMm: 4.5, hold: 0.96, attraction: 1.08, price: 65, level: 1, rarity: 'common', desc: '작은 지렁이와 떡밥을 쓰는 기본 붕어바늘' },
@@ -195,6 +203,7 @@ RODS.push(...EXPANDED_RODS);
 Object.assign(ROD_ACTION, EXPANDED_ROD_ACTION);
 LINES.push(...EXPANDED_LINES);
 HOOKS.push(...EXPANDED_HOOKS);
+HOOKS.push(...SPECIALIST_HOOKS);
 FLOATS.push(...EXPANDED_FLOATS);
 
 export const INGREDIENTS = [
@@ -217,6 +226,7 @@ export const FEED_RECIPES: { id: string; name: string; materials: Partial<Record
 export interface Species {
   id: SpeciesId;
   name: string;
+  classificationText?: string;
   /** 길이 분포 (cm): 중앙값, 퍼짐(로그정규), 최소, 최대 */
   len: { median: number; sigma: number; min: number; max: number };
   /** 무게(g) = a × 길이(cm)^b */
@@ -303,10 +313,12 @@ const BASE_SPECIES: Record<'crucian' | 'carp' | 'bluegill', Species> = {
 export const SPECIES: Record<SpeciesId, Species> = { ...BASE_SPECIES,
   ...createExtraSpecies(),
   mirror: { ...BASE_SPECIES.carp, id: 'mirror', name: '향어',
+    classificationText: '잉어의 양식 품종 · 향어',
     len: { median: 45, sigma: 0.26, min: 22, max: 90 }, depth: [1.8, 4.8, 8],
     baits: { worm: 0.35, paste: 1.45, corn: 0.8, gluten: 0.4, pellet: 1.7, shrimp: 0.3 }, abundance: 0.42, power: 1.65,
     stamina: [18, 7], ranks: SIZE_RANKS.mirror,
     look: FISH_LOOKS.mirror },
+  ...createExpandedSpecies(),
 };
 export const SPECIES_LIST = Object.values(SPECIES);
 

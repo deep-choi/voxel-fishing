@@ -189,7 +189,129 @@ const bass: FishLook = {
   scales: 0.5,
 };
 
-export const FISH_LOOKS: Record<SpeciesId, FishLook> = { crucian, carp, mirror, bluegill, catfish, yellowcat, snakehead, mandarin, bass };
+// 떡붕어는 머리 뒤가 높고 납작하며 꼬리 쪽으로 급격히 좁아진다.
+const hera: FishLook = {
+  art: [
+    '.......FFFF',
+    '......FFFFFFFF',
+    '.....BBBBBBBBBBFF',
+    '....BBBBBBBBBBBBBFF',
+    '...BBSSSSSSSSSSSSSBB',
+    '..BBSSSSSSSSSSSSSSSSB.......FF',
+    '..BEKGSSSSSSSSSSSSSSSBB...FFFF',
+    '.MSSSGSSSSSSSSSSSSSSSSSB.FFFFF',
+    '..WSSGSSSSSSSSSSSSSSSSSSSFFF',
+    '...WPPSSSSSSSSSSSSSSSSSSSFF',
+    '...WWPPSSSSSSSSSSSSSSSSW.FFFF',
+    '....WWWWSSSSSSSSSSSSWWW...FFF',
+    '.....WWWWWWWWWWWWWWW.......FF',
+    '......WWWWWWWWWWWW',
+    '........ff....fff',
+    '.........f.....f',
+  ],
+  colors: { back: '#606d67', side: '#bdc5b4', belly: '#edf0d9', fin: '#738179', finLow: '#909486', eye: '#e2d88c', shine: '#f4f5df' },
+  width: [[1, 1.1], [5, 1.9], [10, 2.9], [16, 2.5], [22, 1.35], [25, 0.8]], scales: 0.85,
+};
+// 누치: 길고 낮은 몸, 아래로 향한 입과 작은 수염, 뚜렷한 꼬리 갈래.
+const nuchi: FishLook = {
+  art: [
+    '..............FFF',
+    '.............FFFFF',
+    '.........BBBBBBBBBBBBB',
+    '.....BBBBBBBBBBBBBBBBBBBBB......FF',
+    '..BBEKGSSSSSSSSSSSSSSSSSSSSBB..FFFF',
+    '.BSSSSGSSSSSSSSSSSSSSSSSSSSSSSFFFF',
+    '..MWWWGPPSSSSSSSSSSSSSSSSSSSSSSFF',
+    '.R..WWPPWWWWWWWWWWWWWWWWWWWW..FFFF',
+    '......WWWWWWWWWWWWWWWWWW.......FF',
+    '.........ff........fff',
+  ],
+  colors: { back: '#555c4b', side: '#aaa98a', belly: '#e3e0c9', fin: '#6c7059', finLow: '#969471', eye: '#d8c365', barbel: '#c5b78e' },
+  width: [[1, 1.1], [5, 2], [12, 2.8], [21, 2.3], [27, 1.2], [30, 0.7]], scales: 0.75,
+};
+// 관상 품종은 흰 몸·붉은 반점 외에도 긴 몸통과 넓은 꼬리로 구별한다.
+const koi: FishLook = {
+  art: [
+    '...............FFFF',
+    '............FFFFFFFFFFF',
+    '........BBBBBOOOBBBBBBBB',
+    '.....BBSSSOOOOOSSSSSSSSSBB.......FFF',
+    '...BBSSSSSOOOOOSSSOOOSSSSSBB....FFFF',
+    '..BEKGSSSSSSSSSSSSOOOOSSSSSSB..FFFFF',
+    '.MSSSGSSSOOOSSSSSSOOOOSSSSSSSSSFFFF',
+    '.RWSSGSSSOOOSSSSSSSSSSSSOOOSSSSFF',
+    'R..WWPPSSSSSSSSSSSSSSSSSOOOSWW.FFFF',
+    '....WWPPWWWWWWWWWWWWWWWWWWWWW...FFFF',
+    '......WWWWWWWWWWWWWWWWWWW........FFF',
+    '.........ff........ffff',
+  ],
+  colors: { back: '#dedbce', side: '#f4eee0', belly: '#fff5dc', accent: '#d7472e', fin: '#d8c9b4', finLow: '#e4d3b8', eye: '#d3a767', barbel: '#e7ddc7' },
+  width: [[1, 1.6], [5, 2.6], [12, 3.7], [23, 3.1], [29, 1.5], [31, 1]], scales: 0.5,
+};
+// 가죽잉어: 두껍고 높은 몸, 매끈한 옆구리, 등선에만 남은 비늘.
+const leather: FishLook = {
+  art: [
+    '...........FFFFF',
+    '.........FFFFFFFFFFFF',
+    '.......BBBBBBBBBBBBBBB',
+    '.....BBBBBLLBBLBBBBBBBBBB',
+    '....BBSSSSSSSSSSSSSSSSSSSBB.....FF',
+    '...BBSSSSSSSSSSSSSSSSSSSSSSBB..FFF',
+    '..BEKGSSSSSSSSSSSSSSSSSSSSSSB.FFFF',
+    '.MSSSGSSSSSSSSSSSSSSSSSSSSSSSSFFF',
+    '.RWSSGSSSSSSSSSSSSSSSSSSSSSSSSFF',
+    'R..WWPPSSSSSSSSSSSSSSSSSSSSSS.FFFF',
+    '...WWWPPSSSSSSSSSSSSSSSSSSWW...FFF',
+    '....WWWWWWWWWWWWWWWWWWWWWW......FF',
+    '......WWWWWWWWWWWWWWWWWW',
+    '.........ff.......ffff',
+  ],
+  colors: { back: '#464a31', side: '#8c895b', belly: '#d2c998', fin: '#595b3c', finLow: '#8b7546', eye: '#d6b75c', shine: '#b4a76b', barbel: '#bcb080' },
+  width: [[1, 1.8], [5, 3.3], [12, 4.7], [21, 3.8], [27, 1.8], [29, 1.15]], scales: 0, mottle: 0.08,
+};
+// 육종향어: 높고 둥근 체형을 별도 실루엣으로 만들고 큰 비늘은 적게 남긴다.
+const bredmirror: FishLook = {
+  art: [
+    '.........FFFFF',
+    '.......FFFFFFFFFFF',
+    '......BBBBBBBBBBBBB',
+    '.....BBBBBBBBBBBBBBBB',
+    '....BBSSSSSSSSSSSSSSSBB',
+    '...BBSSSSSSSSSSSSSSSSSSB.....FF',
+    '..BBSSSSSSSSSSSSSSSSSSSSB...FFF',
+    '..BEKGSSSSSSSSSSSSSSSSSSSB.FFFF',
+    '.MSSSGSSLSSSSSSSSSSSSSSSSSSFFF',
+    '.RWSSGSSSSSSSSSLSSSSSSSSSSSFF',
+    'R..WWPPSSSSSSSSSSSSSSSSSSS.FFFF',
+    '...WWWPPSSSSSSSSSSSSSSSSW...FFF',
+    '....WWWWSSSSSSSSSSSSWWWW.....FF',
+    '.....WWWWWWWWWWWWWWWWW',
+    '......WWWWWWWWWWWWWW',
+    '.........ff.....fff',
+  ],
+  colors: { back: '#4a4432', side: '#a79363', belly: '#e0c997', fin: '#6a5b3b', finLow: '#987448', eye: '#dcb553', shine: '#cfb370', barbel: '#c9b082' },
+  width: [[1, 1.9], [5, 3.6], [11, 5.1], [18, 4.6], [24, 2.2], [27, 1.15]], scales: 0,
+};
+// 초어: 길고 원통형인 몸, 낮고 짧은 등지느러미, 수염 없는 머리.
+const grasscarp: FishLook = {
+  art: [
+    '..................FFF',
+    '.................FFFFF',
+    '.........BBBBBBBBBBBBBBBBBBBB',
+    '.....BBBBBBBBBBBBBBBBBBBBBBBBBBB......FF',
+    '..BBEKGSSSSSSSSSSSSSSSSSSSSSSSSSBB...FFF',
+    '.MSSSSGSSSSSSSSSSSSSSSSSSSSSSSSSSSS.FFFF',
+    '..WSSSGSSSSSSSSSSSSSSSSSSSSSSSSSSSSSFFF',
+    '...WWPPSSSSSSSSSSSSSSSSSSSSSSSSSSSSSFF',
+    '....WWPPWWWWWWWWWWWWWWWWWWWWWWWWWW.FFFF',
+    '.......WWWWWWWWWWWWWWWWWWWWWWWW....FFF',
+    '...........ff...........fff..........FF',
+  ],
+  colors: { back: '#4c6147', side: '#a5ac7c', belly: '#e2e1bc', fin: '#657253', finLow: '#a49c6b', eye: '#d0bb58' },
+  width: [[1, 1.8], [6, 3], [15, 3.6], [25, 3.2], [32, 1.8], [35, 0.9]], scales: 1,
+};
+
+export const FISH_LOOKS: Record<SpeciesId, FishLook> = { crucian, carp, mirror, bluegill, catfish, yellowcat, snakehead, mandarin, bass, hera, nuchi, koi, leather, bredmirror, grasscarp };
 
 /** 몸통 칸 (두께만큼 쌓는다) */
 export const BODY_CELLS = 'BSWDdLOGEKMP';

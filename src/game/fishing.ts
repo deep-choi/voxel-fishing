@@ -8,7 +8,9 @@ import { ACTIVE_FISHERY } from './fisheries';
 import { FishingGrounds } from './grounds';
 import type { Rig } from './profile';
 import { mods } from './modifiers';
-import { baitPresentation, hookFit, hookHoldingPower, hookSetChance, rigSensitivity } from './rigMechanics';
+import { baitPresentation, hookFit, hookHoldingPower, hookSetChance, rigSensitivity, rodBreakLoad } from './rigMechanics';
+import { lineMaterial } from './lineMaterials';
+import { hookRetention } from './hookTraits';
 
 // 민장대 찌낚시 한 판의 규칙: 앞치기 → 찌 서기 → 입질 → 챔질 → 대 세워 버티기 → 랜딩.
 // 릴이 없어 줄 길이는 고정. 고기는 대를 세우고 숙여서 다룬다.
@@ -112,7 +114,6 @@ const NOTCH_M = 0.02;
 /** 고기 힘 배수: 손맛을 위해 실제보다 세게 (작은 붕어도 초릿대가 확실히 휜다) */
 const FISH_POWER = 1.8;
 /** 낚싯대 허용 하중(힘)의 이 배수를 넘기면 부러진다 */
-const ROD_BREAK = 1.25;
 /** 앞치기에서 채비를 놓은 뒤 대 끝 아래로 흔들려 나가는 시간 (초) */
 const CAST_SWING = 0.6;
 
@@ -441,7 +442,7 @@ export class Fishing {
 
   /** 장력 게이지 100%: 원줄이 끊기거나 낚싯대가 부러지는 값 중 먼저 오는 쪽 (kgf) */
   get breakLimit() {
-    return Math.min(this.lineStrength, this.rod.power * ROD_BREAK);
+    return Math.min(this.lineStrength, rodBreakLoad(this.rod));
   }
 
   get trimSink() {
@@ -561,7 +562,7 @@ export class Fishing {
       bTime: rand(1.5, 3),
       dir: this.awayDir(rand(-1, 1)),
       hookHold: hold,
-      slackRisk: (quality === 'perfect' ? 0.5 : quality === 'good' ? 1 : 1.6) / Math.max(0.25, hookFit(b.sp, b.cm, this.hook) * baitPresentation(this.hook, this.bait)),
+      slackRisk: (quality === 'perfect' ? 0.5 : quality === 'good' ? 1 : 1.6) / Math.max(0.25, hookFit(b.sp, b.cm, this.hook) * baitPresentation(this.hook, this.bait) * hookRetention(this.hook)),
       splashT: 0,
     };
     this.liftT = 0;
@@ -670,7 +671,8 @@ export class Fishing {
     this.tension += (load - this.tension) * (1 - Math.exp(-dt * 14));
     if (this.tension > this.lineStrength) return this.lose('break');
     // 대를 세운 채 허용 하중을 크게 넘기면 낚싯대가 부러진다 (숙이면 줄이 직접 받는다)
-    if (!inp.lift && this.tension > this.rod.power * ROD_BREAK) return this.lose('rod');
+    if (!inp.lift && this.tension > rodBreakLoad(this.rod)) return this.lose('rod');
+    if (this.tension > f.hookHold) return this.lose('unhook');
     tmp.set(this.origin.x - f.pos.x, 0, this.origin.z - f.pos.z).normalize();
     const leverage = this.rod.power * (0.8 + Math.max(0, inp.rodDir.y) * 0.8);
     const gain = pulling ? THREE.MathUtils.clamp((leverage - resistance) / this.rod.power, 0.06, 1.4) * 1.9 : 0;
@@ -698,7 +700,7 @@ export class Fishing {
   private fightStep(h: number, inp: FrameInput, f: Fish) {
     const tip = inp.tip;
     // 원줄 + 낚싯대의 탄성 (직렬 스프링). 릴이 없으니 줄 길이는 그대로, 대가 휘며 받아 준다
-    const kLine = this.lineStrength / (0.24 * this.rod.line);
+    const kLine = this.lineStrength / (lineMaterial(this.line).stretchRatio * this.rod.line);
     // 대가 줄과 직각에 가까울수록(세워 버틸수록) 많이 휘며 충격을 받아 준다.
     // 대 끝을 고기 쪽으로 겨누면 대가 안 휘어 원줄이 그대로 받는다
     const lineDir = tmp2.subVectors(f.pos, tip).normalize();
@@ -715,7 +717,7 @@ export class Fishing {
     this.tension = T;
 
     if (T > this.lineStrength) return this.lose('break');
-    if (!inp.lift && T > this.rod.power * ROD_BREAK) return this.lose('rod');
+    if (!inp.lift && T > rodBreakLoad(this.rod)) return this.lose('rod');
     if (T > f.hookHold) return this.lose('unhook');
     if (T < 0.03) this.slackT += h;
     else this.slackT = Math.max(0, this.slackT - h * 2);

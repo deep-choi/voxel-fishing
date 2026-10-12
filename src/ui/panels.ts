@@ -12,8 +12,10 @@ import { fishIcon, itemIcon } from './pixelIcons';
 import type { Settings } from './settings';
 import type { OnlineState, OnlineTab } from '../game/onlineState';
 import type { FisheryId } from '../game/fisheries';
-import { hookGap, hookLoad, hookSharpness, hookSizeLabel, lineDiameter, lineGo } from '../game/rigMechanics';
-import { rankOf } from '../game/data';
+import { hookGap, hookLoad, hookSharpness, lineDiameter, lineGo, rodBreakLoad } from '../game/rigMechanics';
+import { rankOf, rodAction, type FloatShape } from '../game/data';
+import { lineMaterial } from '../game/lineMaterials';
+import { getHookTraits } from '../game/hookTraits';
 import './sizeRanks.css';
 import { itemQuality, QUALITY_LABELS } from '../game/itemQuality';
 import './shopQuality.css';
@@ -141,16 +143,16 @@ export function setupPanel(c: PanelCtx) {
     // 다른 대에 이미 쓰고 있는 수량은 뺀다
     const free = owned - c.rodSlots.filter(s => s.rodId === r.id && s.slotId !== c.rigTarget).length;
     opts.push(choice(r.id === g.rodId, 'rig', 'rod', r.id, free > 0 || r.id === g.rodId, itemIcon('rod', r.id), rarityName(r.rarity, r.name),
-      `길이 ${r.length}m · 원줄 ${r.line}m · 힘 ${r.power}kg<br>${r.id === g.rodId ? '사용 중' : free > 0 ? `남은 ${free}대` : '모두 편성됨'} ${wearBar(p.wearOf(`rod:${r.id}`))}`));
+      `${rodSpecText(r)}<br>${r.id === g.rodId ? '사용 중' : free > 0 ? `남은 ${free}대` : '모두 편성됨'} ${wearBar(p.wearOf(`rod:${r.id}`))}`));
   }
   if (ui.rigStep === 'line') LINES.forEach((l, i) => {
     if (d.lines.includes(l.id)) opts.push(choice(i === g.lineIdx, 'line', 'line', String(i), true, itemIcon('line'), rarityName(l.rarity, l.name),
-      `게임 굵기 ${lineDiameter(l).toFixed(3)}mm · ${l.strength.toFixed(1)}kg에 끊어짐<br>${wearBar(p.wearOf(`line:${l.id}`))}`));
+      `${lineSpecText(l)}<br>${wearBar(p.wearOf(`line:${l.id}`))}`));
   });
   if (ui.rigStep === 'float') for (const f of FLOATS) if (d.floats.includes(f.id)) opts.push(choice(f.id === g.floatId, 'rig', 'float', f.id, true, itemIcon('float', f.id), rarityName(f.rarity, f.name),
-    `${floatTraits(f)}${f.glow ? '' : ' · 밤엔 안 보임'}`));
+    floatSpecText(f)));
   if (ui.rigStep === 'hook') for (const h of HOOKS) if (d.hooks.includes(h.id)) opts.push(choice(h.id === g.hookId, 'rig', 'hook', h.id, true, itemIcon('hook'), rarityName(h.rarity, h.name),
-    `${hookSizeLabel(h)} · 유지력 ${h.hold}`));
+    hookSpecText(h)));
   if (ui.rigStep === 'bait') {
     for (const b of Object.values(BAITS)) {
       const on = g.bait === b.id && !g.baitProductId;
@@ -169,7 +171,7 @@ export function setupPanel(c: PanelCtx) {
   const options = opts.length ? `<div class="choices">${opts.join('')}</div>` : `<p class="empty">보유한 ${names[ui.rigStep]}가 없어요</p>`;
   const depth = `<div class="depth-box"><p class="depth-note">찌에서 바늘까지 · 원줄 ${g.rod.line}m${g.measuredDepth !== null ? ` · 최근 측정 수심 <b>${g.measuredDepth.toFixed(1)}m</b>` : ''}</p>
     <div class="field"><input aria-label="찌에서 바늘까지 수심" type="range" min="0.3" max="${g.rod.line}" step="0.1" value="${g.depthSet}" data-act="depth" ${lockAttr}><output>${g.depthSet.toFixed(1)}m</output></div></div>`;
-  const maxLoad = Math.min(g.line.strength, g.rod.power * 1.6);
+  const maxLoad = Math.min(g.line.strength, rodBreakLoad(g.rod));
   const held = c.rodSlots.find(r => r.slotId === c.rigTarget)?.active;
   return `<div class="panel wide">
   <p class="kicker">보유 장비만 표시 · 성능은 게임 수치</p><h2>채비</h2>
@@ -182,7 +184,7 @@ export function setupPanel(c: PanelCtx) {
   <div class="rig-stats">
     <span>줄 굵기 <b>${lineDiameter(g.line).toFixed(3)}mm</b></span>
     <span>채비 예민함 <b>${g.rigSensitivity.toFixed(2)}</b></span>
-    <span>최대 하중 <b>${maxLoad.toFixed(1)}kg</b></span>
+    <span>줄·대 한계 <b>${maxLoad.toFixed(1)}kgf</b></span>
     <span>원줄 ${wearBar(p.wearOf(`line:${g.line.id}`))}</span>
     <span>낚싯대 ${wearBar(p.wearOf(`rod:${g.rodId}`))}</span>
     <span>뜰채 한계 <b>${p.netSpec.maxKg}kg</b></span>
@@ -241,7 +243,7 @@ function inventoryItems(c: PanelCtx): InvItem[] {
     const wear = p.wearOf(`rod:${r.id}`);
     const deployed = c.rodSlots.filter(s => s.rodId === r.id);
     items.push({ key: `rod:${r.id}`, name: r.name, rarity: r.rarity, icon: itemIcon('rod', r.id), count: d.rods[r.id], desc: r.desc,
-      lines: [`길이 ${r.length}m · 원줄 ${r.line}m · 힘 ${r.power}kg`, `보유 ${d.rods[r.id]}대 · 가방에 ${d.rods[r.id] - deployed.length}대 · 펼침 ${deployed.length}대`, wearBar(wear)],
+      lines: [rodSpecText(r), `보유 ${d.rods[r.id]}대 · 가방에 ${d.rods[r.id] - deployed.length}대 · 펼침 ${deployed.length}대`, wearBar(wear)],
       actions: [
         d.rods[r.id] > deployed.length ? `<button class="btn small primary" data-act="deploy" data-id="${r.id}">꺼내기</button>` : '',
         // 펼쳐 둔 대마다 회수 버튼: 채비를 걷고 가방에 넣는다
@@ -253,7 +255,7 @@ function inventoryItems(c: PanelCtx): InvItem[] {
     items.push({ key: `line:${l.id}`, name: l.name, rarity: l.rarity, icon: itemIcon('line'), count: '', desc: l.desc,
       lines: [lineSpecText(l), wearBar(wear)], actions: [wear > 0.01 ? `<button class="btn small" data-act="repair" data-id="line:${l.id}">새 줄 감기 · ${won(p.repairCost(`line:${l.id}`))}</button>` : ''] });
   }
-  for (const f of FLOATS) if (d.floats.includes(f.id)) items.push({ key: `float:${f.id}`, name: f.name, rarity: f.rarity, icon: itemIcon('float', f.id), count: '', desc: f.desc, lines: [floatTraits(f)], actions: [] });
+  for (const f of FLOATS) if (d.floats.includes(f.id)) items.push({ key: `float:${f.id}`, name: f.name, rarity: f.rarity, icon: itemIcon('float', f.id), count: '', desc: f.desc, lines: [floatSpecText(f)], actions: [] });
   for (const h of HOOKS) if (d.hooks.includes(h.id)) items.push({ key: `hook:${h.id}`, name: h.name, rarity: h.rarity, icon: itemIcon('hook'), count: '', desc: h.desc, lines: [hookSpecText(h)], actions: [] });
   for (const n of NETS) if (d.nets.includes(n.id)) items.push({ key: `net:${n.id}`, name: n.name, rarity: n.rarity, icon: itemIcon('net'), count: d.net === n.id ? 'E' : '', desc: n.desc,
     lines: [`${n.maxKg}kg까지 안전하게 떠냄`], actions: [d.net === n.id ? '<span class="tag">장착 중</span>' : `<button class="btn small" data-act="equip" data-kind="net" data-id="${n.id}">장착</button>`] });
@@ -301,6 +303,23 @@ export function inventoryPanel(c: PanelCtx) {
     content = `<h3>떡밥 재료</h3><div class="slot-row">${INGREDIENTS.map(i => `<div class="equip-slot">${slot(itemIcon(i.id), d.ingredients[i.id], `title="${i.name}"`)}<small>${i.name}</small></div>`).join('')}</div>
       <h3>배합대 <small>재료를 섞어 바늘 떡밥과 집어 떡밥을 만듭니다</small></h3>
       <div class="recipes">${FEED_RECIPES.map(r => {
+/** 상점·가방·채비에 같은 계산값을 표시한다. */
+const rodSpecText = (r: (typeof RODS)[number]) => {
+  const action = rodAction(r.id);
+  const actionName = action >= 0.7 ? '경질 7:3' : action >= 0.5 ? '중경질 6:4' : '연질 5:5';
+  return `대 ${r.length}m · 원줄 ${r.line}m · 조자 ${actionName}<br>기준 하중 ${r.power.toFixed(1)}kgf · 파손 한계 ${rodBreakLoad(r).toFixed(1)}kgf`;
+};
+const lineSpecText = (l: (typeof LINES)[number]) => {
+  const material = lineMaterial(l);
+  return `${lineGo(l)}호 · ${material.name} · 굵기 ${lineDiameter(l).toFixed(3)}mm · 강도 ${l.strength.toFixed(1)}kgf<br>늘어남 ${(material.stretchRatio * 100).toFixed(1)}% · 시인성 ${Math.round(l.visibility * material.visibilityScale * 100)}% · ${material.description}`;
+};
+const hookNumberText = (h: (typeof HOOKS)[number]) => `${h.name.match(/(\d+)호/)?.[1] ?? '?'}호`;
+const hookSpecText = (h: (typeof HOOKS)[number]) => {
+  const traits = getHookTraits(h);
+  return `${hookNumberText(h)} · ${traits.shapeLabel} · 축 ${traits.wireMm.toFixed(2)}mm · ${traits.barbed ? '미늘 있음' : '무미늘'}<br>폭 ${hookGap(h).toFixed(1)}mm · 하중 ${hookLoad(h).toFixed(1)}kgf · 날카로움 ×${hookSharpness(h).toFixed(2)}`;
+};
+const FLOAT_SHAPE_LABELS: Record<FloatShape, string> = { stick: '막대형', short: '단찌형', slim: '유선형', egg: '알형', long: '장찌형', reed: '갈대형', peacock: '공작형', electro: '전자찌형' };
+const floatSpecText = (f: (typeof FLOATS)[number]) => `${FLOAT_SHAPE_LABELS[f.shape ?? 'stick']} · ${floatTraits(f)}<br>정착 속도 ${f.sinkSpeed.toFixed(2)}m/s · 물결 흔들림 ×${(f.sway ?? 1).toFixed(2)}${f.light || f.glow ? '' : ' · 야간 발광 없음'}`;
         const materials = Object.entries(r.materials) as [IngredientId, number][];
         const available = materials.every(([id, n]) => d.ingredients[id] >= n);
         return `<div class="recipe ${available ? '' : 'off'}"><div class="recipe-in">${materials.map(([id, n]) => slot(itemIcon(id), n, `title="${INGREDIENTS.find(i => i.id === id)!.name}"`)).join('<i>+</i>')}</div><i class="arrow">→</i>${slot(itemIcon(r.bait), r.yield, `title="${r.name}"`)}
@@ -310,10 +329,6 @@ export function inventoryPanel(c: PanelCtx) {
   return `<div class="panel wide inventory-panel"><p class="kicker">${won(d.coins)} · Lv.${p.level}</p><h2>가방</h2>
     ${tabs('inventory-tab', tab, [['all', '전체'], ['rod', '낚싯대'], ['tackle', '원줄·찌·바늘'], ['bait', '미끼·떡밥'], ['gear', '뜰채·살림망'], ['craft', '배합대']])}${content}${close('I')}</div>`;
 }
-/** 원줄 규격 한 줄 */
-const lineSpecText = (l: (typeof LINES)[number]) => `${lineGo(l)}호 · 굵기 ${lineDiameter(l).toFixed(3)}mm · 강도 ${l.strength.toFixed(1)}kg`;
-/** 바늘 규격 한 줄 */
-const hookSpecText = (h: (typeof HOOKS)[number]) => `${hookSizeLabel(h)} · 하중 ${hookLoad(h).toFixed(1)}kg · 날카로움 ×${hookSharpness(h).toFixed(2)}`;
 
 
 // ── 상점 ──
@@ -331,6 +346,7 @@ export function shopPanel(c: PanelCtx) {
     return `<button class="btn small shop-goal-button ${selected ? 'on' : ''}" data-act="${selected ? 'clear-shop-goal' : 'shop-goal'}" data-kind="${kind}" data-id="${item.id}">${selected ? '목표 해제' : '구매목표'}</button>`;
   };
   const unitPrice = (price: number, count: number) => `${(price / count).toLocaleString('ko-KR', { maximumFractionDigits: 1 })}원`;
+  };
   const ordered = <T extends ShopItem>(kind: ShopKind, list: readonly T[]) => list.slice().sort((a, b) => itemQuality(kind, a.id).tier - itemQuality(kind, b.id).tier || a.price - b.price);
   const card = (kind: ShopKind, item: ShopItem, icon: string, info: string) => {
     if (!matches(kind, item)) return '';
@@ -351,13 +367,12 @@ export function shopPanel(c: PanelCtx) {
       groups.set(model, [...(groups.get(model) ?? []), t]);
     }
     return [...groups].sort(([, a], [, b]) => Math.min(...a.map(t => itemQuality(kind, t.id).tier)) - Math.min(...b.map(t => itemQuality(kind, t.id).tier)) || Math.min(...a.map(t => t.price)) - Math.min(...b.map(t => t.price))).map(([model, items]) => `<section class="spec-group"><h3>${esc(model)}</h3><p class="spec-purpose">${esc(itemQuality(kind, items[0].id).purpose)}</p>
-      <div class="spec-table"><div class="spec-row head">${head.map(h => `<span>${h}</span>`).join('')}<span>품질 · 가격</span><span></span></div>
+      <div class="spec-table" style="--spec-columns:${head.length - 1};--spec-width:${Math.max(600, head.length * 108 + 174)}px"><div class="spec-row head">${head.map(h => `<span>${h}</span>`).join('')}<span>품질 · 가격</span><span></span></div>
       ${items.sort((x, y) => size(x) - size(y)).map(t => {
         const owned = p.owns(kind, t.id), locked = (t.level ?? 1) > p.level;
         return `<div class="spec-row ${owned ? 'owned' : ''} ${locked ? 'locked' : ''}">${cols(t).map(v => `<span>${v}</span>`).join('')}<span class="spec-quality-price" title="${esc(itemQuality(kind, t.id).purpose)}">${qualityBadge(kind, t.id)}<strong>${won(t.price)}</strong></span>
           <div class="shop-actions">${goalButton(kind, t)}<button class="btn small ${owned || locked ? '' : 'primary'}" data-act="buy" data-kind="${kind}" data-id="${t.id}" ${owned || locked || d.coins < t.price ? 'disabled' : ''}>${owned ? '보유 중' : locked ? `Lv.${t.level} 필요` : d.coins < t.price ? '금액 부족' : '구매'}</button></div></div>`;
       }).join('')}</div></section>`).join('');
-  };
   };
   let body = '';
   switch (c.ui.shopTab) {
@@ -368,11 +383,17 @@ export function shopPanel(c: PanelCtx) {
       ].sort((a, b) => itemQuality('bait', a.item.id).tier - itemQuality('bait', b.item.id).tier || a.item.price - b.item.price).map(b => card('bait', b.item, b.icon, b.info)).join('')
         + '<h3 class="shop-section">떡밥 재료</h3>' + ordered('ingredient', INGREDIENTS).map(i => card('ingredient', { ...i, name: `${i.name} ${i.count}개` }, itemIcon(i.id), `개당 ${unitPrice(i.price, i.count)} · 재고 ${d.ingredients[i.id]}`)).join('');
       break;
-    case 'rod': body = ordered('rod', RODS).map(r => card('rod', r, itemIcon('rod', r.id), `길이 ${r.length}m · 힘 ${r.power}kg · 보유 ${d.rods[r.id] ?? 0}대`)).join(''); break;
+    case 'rod': body = ordered('rod', RODS).map(r => card('rod', r, itemIcon('rod', r.id), `${rodSpecText(r)} · 보유 ${d.rods[r.id] ?? 0}대`)).join(''); break;
     // 원줄·바늘은 브랜드 제품별로 묶고, 호수마다 규격을 한 줄씩
-    case 'line': body = specGroups('line', LINES, l => +lineGo(l), l => [`<b>${lineGo(l)}호</b>`, `굵기 ${lineDiameter(l).toFixed(3)}mm`, `강도 ${l.strength.toFixed(1)}kg`, `눈에 띔 ${Math.round(l.visibility * 100)}%`], ['호수', '굵기', '강도', '눈에 띔']); break;
-    case 'float': body = ordered('float', FLOATS).map(f => card('float', f, itemIcon('float', f.id), floatTraits(f))).join(''); break;
-    case 'hook': body = specGroups('hook', HOOKS, h => +(h.name.match(/(\d+)호/)?.[1] ?? 0), h => [`<b>${h.name.match(/(\d+)호/)?.[1] ?? '?'}호</b>`, `폭 ${hookGap(h).toFixed(1)}mm`, `하중 ${hookLoad(h).toFixed(1)}kg`, `날카로움 ×${hookSharpness(h).toFixed(2)}`], ['호수', '바늘 폭', '하중', '날카로움']); break;
+    case 'line': body = specGroups('line', LINES, l => +lineGo(l), l => {
+      const material = lineMaterial(l);
+      return [`<b>${lineGo(l)}호</b>`, `<span title="${esc(material.description)}">${material.name}</span>`, `${lineDiameter(l).toFixed(3)}mm`, `${l.strength.toFixed(1)}kgf`, `${(material.stretchRatio * 100).toFixed(1)}%`, `${Math.round(l.visibility * material.visibilityScale * 100)}%`];
+    }, ['호수', '재질', '굵기', '강도', '늘어남', '시인성']); break;
+    case 'float': body = ordered('float', FLOATS).map(f => card('float', f, itemIcon('float', f.id), floatSpecText(f))).join(''); break;
+    case 'hook': body = specGroups('hook', HOOKS, h => +(h.name.match(/(\d+)호/)?.[1] ?? 0), h => {
+      const traits = getHookTraits(h);
+      return [`<b>${hookNumberText(h)}</b>`, traits.shapeLabel, `${traits.wireMm.toFixed(2)}mm`, traits.barbed ? '있음' : '무미늘', `${hookGap(h).toFixed(1)}mm`, `${hookLoad(h).toFixed(1)}kgf`, `×${hookSharpness(h).toFixed(2)}`];
+    }, ['호수', '형태', '바늘 축', '미늘', '바늘 폭', '하중', '날카로움']); break;
     case 'net': body = '<h3 class="shop-section">뜰채</h3>' + ordered('net', NETS).map(n => card('net', n, itemIcon('net'), `${n.maxKg}kg까지`)).join('') + '<h3 class="shop-section">살림망</h3>' + ordered('keepnet', KEEPNETS).map(k => card('keepnet', k, itemIcon('keepnet'), `${k.capacity}마리 보관`)).join(''); break;
     case 'repair': {
       const worn = [...RODS.filter(r => d.rods[r.id]).map(r => [`rod:${r.id}`, r.name, itemIcon('rod', r.id)]), ...LINES.filter(l => d.lines.includes(l.id)).map(l => [`line:${l.id}`, l.name, itemIcon('line')])]
@@ -401,13 +422,13 @@ export function shopPanel(c: PanelCtx) {
 export function collectionPanel(c: PanelCtx) {
   const p = c.player;
   const found = SPECIES_LIST.filter(sp => p.data.catches.some(r => r.species === sp.id)).length;
-  return `<div class="panel wide"><p class="kicker">물고기 도감</p><h2>${found} / ${SPECIES_LIST.length}종 발견</h2><div class="fish-collection">${SPECIES_LIST.map(sp => {
+  return `<div class="panel wide"><p class="kicker">물고기 도감</p><h2>${found} / ${SPECIES_LIST.length}종·품종 발견</h2><div class="fish-collection">${SPECIES_LIST.map(sp => {
     const catches = p.data.catches.filter(r => r.species === sp.id);
     const rule = SPECIES_RULES[sp.id];
     if (!catches.length) return `<article class="species-card"><span class="species-status">미발견</span><div class="fish-icon">${fishIcon(sp.look)}</div><h3>???</h3><p>아직 낚아 본 적 없는 고기</p></article>`;
     const tags = [rule.bounty ? '<span class="tag bad">생태계교란종 · 방생 금지</span>' : '', rule.minKeepCm ? `<span class="tag">금지 체장 ${rule.minKeepCm}cm</span>` : ''].join('');
     const night = catches.filter(r => { const h = new Date(r.at).getHours(); return h < 6 || h >= 19; }).length;
-    return `<article class="species-card discovered"><span class="species-status">${catches.length}마리 기록</span><div class="fish-icon">${fishIcon(sp.look)}</div><h3>${sp.name}</h3>${tags}
+    return `<article class="species-card discovered"><span class="species-status">${catches.length}마리 기록</span><div class="fish-icon">${fishIcon(sp.look)}</div><h3>${sp.name}</h3>${sp.classificationText ? `<p>${esc(sp.classificationText)}</p>` : ''}${tags}
       <p>최대어 ${p.best[sp.id] ? `${p.best[sp.id].toFixed(1)}cm` : '—'} · 평균 ${(catches.reduce((n, r) => n + r.cm, 0) / catches.length).toFixed(1)}cm<br>등급 ${sp.ranks.slice().reverse().map(([n, cm]) => `${n} ${cm}cm↑`).join(' → ')}<br>시세 ${won(rule.perKg * marketMul(sp.id))}/kg${night ? ` · 밤에 ${night}마리` : ''}</p></article>`;
   }).join('')}</div>${close('V')}</div>`;
 }

@@ -24,7 +24,7 @@
 #hud .quality-shop .spec-row.head { font-weight: 700; font-size: 11px; }
 #hud .quality-shop .spec-purpose { margin: 0 0 7px; color: var(--dim); font-size: 11px; }
 #hud .quality-shop .spec-table { max-width: 100%; overflow-x: auto; }
-#hud .quality-shop .spec-row { min-width: 600px; grid-template-columns: 48px 1fr 1fr 1fr 86px 88px; font-variant-numeric: tabular-nums; }
+#hud .quality-shop .spec-row { min-width: var(--spec-width, 600px); grid-template-columns: 48px repeat(var(--spec-columns, 3), minmax(88px, 1fr)) 86px 88px; font-variant-numeric: tabular-nums; }
 #hud .quality-shop .spec-row > span:nth-child(4), #hud .quality-shop .spec-row > span:nth-child(5) { display: block; }
 #hud .quality-shop .spec-quality-price strong { display: block; margin-top: 2px; font-size: 11px; white-space: nowrap; }
 #hud .quality-shop .shop-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 5px; }

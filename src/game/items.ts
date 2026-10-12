@@ -50,4 +50,10 @@ export const SPECIES_RULES: Record<SpeciesId, { perKg: number; minKeepCm?: numbe
   snakehead: { perKg: 100, active: 'day' },
   mandarin: { perKg: 480, minKeepCm: 18, active: 'night' },
   bass: { perKg: 60, bounty: 250, active: 'twilight' },
+  hera: { perKg: 220, active: 'day' },
+  nuchi: { perKg: 170, active: 'day' },
+  koi: { perKg: 180, active: 'any' },
+  leather: { perKg: 100, active: 'night' },
+  bredmirror: { perKg: 110, active: 'any' },
+  grasscarp: { perKg: 85, active: 'day' },
 };
