@@ -8,7 +8,7 @@ import { ACTIVE_FISHERY } from './fisheries';
 import { FishingGrounds } from './grounds';
 import type { Rig } from './profile';
 import { mods } from './modifiers';
-import { baitPresentation, hookFit, hookHoldingPower, hookSetChance, rigSensitivity, rodBreakLoad } from './rigMechanics';
+import { baitPresentation, hookFit, hookHoldingPower, hookSetChance, rigSensitivity, rodBreakLoad, selfHookChance, type HooksetQuality } from './rigMechanics';
 import { lineMaterial } from './lineMaterials';
 import { hookRetention } from './hookTraits';
 
@@ -74,8 +74,8 @@ interface Bite {
   keys: [number, number, number][];
   windows: BiteWindow[];
   end: number;
-  /** 아무도 챔질하지 않으면: 떠나거나, 스스로 바늘에 걸려 달린다 */
-  selfHook: boolean;
+  /** 입질마다 한 번만 자연 입걸림을 판정한다. */
+  selfHookChecked: boolean;
 }
 
 type Behavior = 'run' | 'shake' | 'dive' | 'rest';
@@ -408,6 +408,17 @@ export class Fishing {
     if (this.bite) {
       const b = this.bite;
       b.t += dt;
+      // 정확한 챔질 구간이 지난 본신 끝에 한 번만 판정한다. 프레임 수에 무관하다.
+      const take = b.windows[b.windows.length - 1];
+      if (!b.selfHookChecked && take && b.t >= take.p1) {
+        b.selfHookChecked = true;
+        if (Math.random() < selfHookChance(b.sp, b.cm, this.hook, this.bait)) {
+          this.bite = null;
+          this.startFight(b, 'self');
+          this.emit({ type: 'toast', text: '스스로 바늘에 걸렸어요!', tone: 'good' });
+          return;
+        }
+      }
       [dy, dx] = sampleKeys(b.keys, b.t);
       const vis = 1 - this.restTilt * 0.8;
       dy *= vis * this.rigSensitivity;
@@ -508,7 +519,7 @@ export class Fishing {
   }
 
   private biteEnds() {
-    // 챔질하지 못한 입질은 그대로 끊긴다: 고기가 떠나고 한동안 조용하다 (저절로 걸리지 않는다)
+    // 챔질과 자연 입걸림 모두 이루어지지 않으면 고기가 떠난다.
     this.bite = null;
     this.biteCooldown = this.fastTest ? 6 : rand(15, 35);
   }
@@ -545,7 +556,7 @@ export class Fishing {
 
   // ── 파이팅 ───────────────────────────────
 
-  private startFight(b: Bite, quality: 'perfect' | 'good' | 'poor') {
+  private startFight(b: Bite, quality: HooksetQuality) {
     this.fightTime = 0;
     const kg = weightKg(b.sp, b.cm);
     const hold = hookHoldingPower(b.sp, b.cm, this.hook, this.bait, quality) * rand(0.94, 1.06);
@@ -563,7 +574,7 @@ export class Fishing {
       bTime: rand(1.5, 3),
       dir: this.awayDir(rand(-1, 1)),
       hookHold: hold,
-      slackRisk: (quality === 'perfect' ? 0.5 : quality === 'good' ? 1 : 1.6) / Math.max(0.25, hookFit(b.sp, b.cm, this.hook) * baitPresentation(this.hook, this.bait) * hookRetention(this.hook)),
+      slackRisk: (quality === 'perfect' ? 0.5 : quality === 'good' ? 1 : quality === 'self' ? 1.25 : 1.6) / Math.max(0.25, hookFit(b.sp, b.cm, this.hook) * baitPresentation(this.hook, this.bait) * hookRetention(this.hook)),
       splashT: 0,
     };
     this.liftT = 0;
@@ -884,7 +895,6 @@ function makeBite(sp: Species, cm = rollLength(sp)): Bite {
       t += rand(0.6, 1.8);
     }
   };
-  let selfHook = false;
   if (sp.bite === 'rise') {
     // 붕어: 깔짝거리다가 찌를 천천히 밀어 올린다. 올라와 멈춘 순간이 챔질 타이밍
     nibble(Math.floor(rand(0, 2.5)), 0.01);
@@ -926,8 +936,7 @@ function makeBite(sp: Species, cm = rollLength(sp)): Bite {
     keys.push([s0 + 1, -0.42, side * 1.5]);
     windows.push({ t0: s0 - 0.2, t1: s0 + 1.4, p0: s0 + 0.12, p1: s0 + 0.85 });
     t = s0 + 1.4;
-    selfHook = Math.random() < 0.3;
-    if (!selfHook) keys.push([t + 0.6, 0, 0]);
+    keys.push([t + 0.6, 0, 0]);
     t += 0.7;
   } else if (sp.bite === 'drag') {
     // 메기·가물치: 눌러 먹은 뒤 옆으로 무겁게 끌고 간다.
@@ -935,7 +944,7 @@ function makeBite(sp: Species, cm = rollLength(sp)): Bite {
     const side = Math.random() < 0.5 ? -0.32 : 0.32;
     keys.push([t, 0, 0], [t + 0.7, -0.035, side * 0.2], [t + 1.4, -0.22, side], [t + 2.6, -0.4, side * 1.4]);
     windows.push({ t0: t + 0.6, t1: t + 2.8, p0: t + 1.1, p1: t + 2.3 });
-    t += 3; keys.push([t, 0, 0]); selfHook = Math.random() < 0.15;
+    t += 3; keys.push([t, 0, 0]);
   } else if (sp.bite === 'dart') {
     // 쏘가리·배스: 짧게 건드린 뒤 빠르게 가져간다.
     const side = Math.random() < 0.5 ? -0.2 : 0.2;
@@ -957,5 +966,5 @@ function makeBite(sp: Species, cm = rollLength(sp)): Bite {
       }
     }
   }
-  return { sp, cm, t: 0, keys, windows, end: t + 0.2, selfHook };
+  return { sp, cm, t: 0, keys, windows, end: t + 0.2, selfHookChecked: false };
 }

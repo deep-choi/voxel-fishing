@@ -53,7 +53,13 @@ export function baitPresentation(hook: HookSpec, bait: BaitId) {
 export function hookSetChance(sp: Species, cm: number, hook: HookSpec, bait: BaitId, perfect: boolean) {
   return clamp((0.5 + 0.42 * hookFit(sp, cm, hook)) * baitPresentation(hook, bait) * hookSharpness(hook) * hookPenetration(hook) * (perfect ? 1.08 : 0.94), 0.12, 0.97);
 }
-export function hookHoldingPower(sp: Species, cm: number, hook: HookSpec, bait: BaitId, quality: 'perfect' | 'good' | 'poor') {
-  const timing = quality === 'perfect' ? 1.65 : quality === 'good' ? 1.1 : 0.6;
+/** 본신 한 번당 자연 입걸림 확률. 직접 챔질보다 낮고, 끌고 가는 입질에 유리하다. */
+export function selfHookChance(sp: Species, cm: number, hook: HookSpec, bait: BaitId) {
+  const take = { rise: 0.14, sink: 0.34, drag: 0.42, dart: 0.3, jitter: 0.12 }[sp.bite];
+  return clamp(take * hookSetChance(sp, cm, hook, bait, false), 0.02, 0.4);
+}
+export type HooksetQuality = 'perfect' | 'good' | 'self' | 'poor';
+export function hookHoldingPower(sp: Species, cm: number, hook: HookSpec, bait: BaitId, quality: HooksetQuality) {
+  const timing = quality === 'perfect' ? 1.65 : quality === 'good' ? 1.1 : quality === 'self' ? 0.9 : 0.6;
   return hookLoad(hook) * hookFit(sp, cm, hook) * (0.7 + 0.3 * baitPresentation(hook, bait)) * timing * hookRetention(hook);
 }
