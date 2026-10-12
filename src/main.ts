@@ -24,7 +24,7 @@ import { createPixelPass, type PixelLook } from './render/pixelPass';
 import { Float, FishingLine, Hook, Rod, RodHands, Splashes, rodRestElevation, type RodPose } from './render/tackle';
 import { Hud, type MenuModal } from './ui/hud';
 import { loadSettings, saveSettings, touchEnabled } from './ui/settings';
-import { TouchControls } from './ui/touch';
+import { NO_TOUCH, TouchControls, enterFullscreen, type TouchLayout } from './ui/touch';
 import { heightAt, PLAYER, shoreDistance, WATER_Y } from './world/lake';
 import { Mist } from './world/mist';
 import { setupSky, shared } from './world/sky';
@@ -225,6 +225,8 @@ const hud = new Hud(document.getElementById('hud')!, game, player, env, settings
     sound.start();
     lock();
     applyTouch();
+    // 모바일: 입장 버튼을 누른 순간 가로 전체 화면으로
+    if (document.body.classList.contains('touch')) enterFullscreen();
     if (game.phase === 'landed' && !landing) hud.showCatch(game.lastCatch);
   },
   sessionEnded() {
@@ -314,9 +316,7 @@ const touch = new TouchControls(document.getElementById('hud')!, {
   },
   tap(action) {
     if (action === 'interact') { if (game.phase === 'landed') finishCatch(true); else if (exploring()) interactSlot(); }
-    if (action === 'hookset' && playing()) input.hookset = true;
     if (action === 'retrieve') { if (game.phase === 'landed') finishCatch(false); else if (playing()) input.retrieve = true; }
-    if (action === 'feed') feed();
     if (action === 'zoom' && playing()) zoom = !zoom;
     if (action === 'stow' && exploring()) removeRod();
   },
@@ -328,6 +328,23 @@ function applyTouch() {
   if (on && locked()) document.exitPointerLock();
 }
 applyTouch();
+
+/** 터치 버튼: 지금 할 수 있는 동작만. 손에 든 대의 단계에 따라 큰 버튼이 던지기 → 챔질 → 세우기로 바뀐다 */
+function touchLayout(interact: string, nearRod: boolean, biting: boolean): TouchLayout {
+  if (!exploring() || landing || parking) return NO_TOUCH;
+  if (active) {
+    switch (game.phase) {
+      case 'ready': return { main: 'cast', alt: null, chips: ['park', 'stow'] };
+      case 'charging': return { main: 'cast', alt: null, chips: [] };
+      case 'casting': case 'flying': return { main: 'hookset', alt: null, chips: [], dim: true };
+      case 'settling': case 'waiting': return { main: 'hookset', alt: 'retrieve', chips: ['park', 'zoom'], zoomOn: zoom };
+      case 'fighting': return { main: 'raise', alt: 'lower', chips: [] };
+      default: return NO_TOUCH;
+    }
+  }
+  if (!interact) return NO_TOUCH;
+  return { main: 'interact', alt: null, chips: nearRod ? ['stow'] : [], label: biting ? `${interact} · 입질!` : interact, alert: biting };
+}
 
 function feed() {
   if (!exploring()) return;
@@ -1231,6 +1248,10 @@ function frame(dt: number, render = true) {
     : nearRod ? `<kbd>E</kbd> 들기${nearRod.game.debugBiteInfo ? ' · 입질!' : ''}`
     : near && mounted.size < MAX_DEPLOYED_RODS ? '<kbd>E</kbd> 낚싯대 꺼내기' : '';
   hud.setInteraction(prompt, active ? `${active.slot.platform}번 좌대 · 낚싯대 ${active.slot.number}` : null);
+  if (document.body.classList.contains('touch')) {
+    const label = stallNear ? stallNear.name : nearRod ? '들기' : near && mounted.size < MAX_DEPLOYED_RODS ? '꺼내기' : '';
+    touch.setLayout(touchLayout(label, !!nearRod, !!nearRod?.game.debugBiteInfo));
+  }
   hud.setRodSlots(Array.from(mounted.values(), (m, i) => ({ slotId: m.slot.id, number: here ? m.slot.number : i + 1, rodId: m.game.rodId, name: m.game.rod.name, platform: m.slot.platform,
     state: m === active ? parking ? '거치 중' : '손에 듦' : m.game.phase === 'fighting' ? '물고기 걸림' : m.game.debugBiteInfo ? '입질!' : '거치됨',
     active: m === active, biting: m.game.debugBiteInfo !== null || m.game.phase === 'fighting' })));

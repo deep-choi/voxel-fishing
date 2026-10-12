@@ -15,6 +15,7 @@ import './systems.css';
 import './clean.css';
 import './fisheries.css';
 import './online.css';
+import './mobile.css';
 
 // 화면 위 정보. 몰입을 위해 항상 보이는 것은 조준점·핫바·경험치 줄·시계·메뉴 버튼·살림망 게이지뿐이고,
 // 나머지(키 안내, 캐스팅 힘, 장력계, 찌 확대, 대회)는 필요할 때만 나타난다.
@@ -91,7 +92,7 @@ export class Hud {
     <button class="btn small" data-act="menu" data-id="online" data-ref="onlineEntry">Google 로그인 · 닉네임</button>
     <p class="lead">Google 로그인 후 버들못에서 낚시를 시작하세요.</p>
     ${P.fisheryCards()}
-    <ul class="keys">
+    <ul class="keys keys-desk">
       <li><kbd>마우스</kbd> 둘러보기 · <kbd>WASD</kbd> 걷기 · <kbd>M</kbd> 좌대 이동</li>
       <li><kbd>E</kbd> 대 꺼내 들기 / 거치 / 다시 들기 · <kbd>F</kbd> 회수해 가방에 넣기</li>
       <li><kbd>좌클릭 길게 → 놓기</kbd> 앞치기 · <kbd>R</kbd> 채비 걷기</li>
@@ -99,6 +100,11 @@ export class Hud {
       <li>걸면: <kbd>좌클릭 누르기</kbd> 대 세우기 · <kbd>우클릭 누르기</kbd> 대 숙이기</li>
       <li><kbd>1</kbd>~<kbd>3</kbd> 낚싯대 · <kbd>4</kbd> 집어</li>
       <li><kbd>I</kbd> 가방 <kbd>C</kbd> 채비 <kbd>B</kbd> 상점 <kbd>Q</kbd> 의뢰 <kbd>T</kbd> 대회 <kbd>K</kbd> 기술 <kbd>O</kbd> 설정</li>
+    </ul>
+    <ul class="keys keys-touch">
+      <li>왼쪽 아래 엄지로 걷기 · 화면을 끌어 둘러보기</li>
+      <li>오른쪽 아래 큰 버튼: 던지기 → 챔질 → 세우기로 바뀌어요</li>
+      <li>아래 칸을 눌러 낚싯대 바꾸기 · 오른쪽 위 ☰ 메뉴</li>
     </ul>
     <button class="btn primary" data-act="start" data-ref="entry" disabled>계정 확인 중…</button>
     <p class="tip">시간·날씨에 따라 어종별 입질이 달라져요</p>
@@ -322,7 +328,8 @@ export class Hud {
       records: P.recordsPanel, platforms: P.platformsPanel, quests: P.questsPanel, skills: P.skillsPanel, tournament: P.tournamentPanel,
       settings: P.settingsPanel, pause: P.pausePanel, online: P.onlinePanel,
     };
-    box.innerHTML = this.modal === 'none' ? '' : panels[this.modal](c);
+    // 터치 화면에서는 패널이 화면을 꽉 채우므로 오른쪽 위에 닫기 버튼을 따로 둔다
+    box.innerHTML = this.modal === 'none' ? '' : `${panels[this.modal](c)}<button class="sheet-x" data-act="resume" aria-label="닫기"><i></i><i></i></button>`;
   }
   private updateForecast() {
     if (this.modal !== 'setup') return;

@@ -57,20 +57,21 @@ export class Platforms {
         this.box(x - side * 3.4, DECK_Y + 0.22, z + 2.6, 1.05, 0.44, 0.65, '#d2c7a1');
         const names = config.names;
         const p: Platform = { id, x, z, name: `${String(id).padStart(2, '0')}번 ${names[id - 1]} 좌대`, slots: [] };
-        // 받침틀 하나: 뒤꽂이 가로대와 앞받침 가로대를 옆 틀로 잇고, 세 대를 부채꼴로 건다.
+        // 받침틀 하나: 뒤꽂이 가로대와 앞받침 가로대를 옆 틀로 잇고, 세 대를 일자로 나란히 건다.
         // 좌대 앞끝(z - 5)에서 8cm만 안쪽. 뒤꽂이도 함께 물 쪽으로 옮긴다.
         const frontZ = z - 5 + 0.08, backZ = frontZ + 0.82;
-        this.box(x, DECK_Y + 0.05, backZ, 1.3, 0.06, 0.08, '#40584f');
+        this.box(x, DECK_Y + 0.05, backZ, 2, 0.06, 0.08, '#40584f');
         this.box(x, DECK_Y + 0.05, frontZ, 2, 0.06, 0.08, '#40584f');
         for (const sx of [-1, 1]) {
           this.box(x + sx * 0.98, DECK_Y + 0.05, (backZ + frontZ) / 2, 0.08, 0.06, backZ - frontZ + 0.08, '#40584f');
-          this.box(x + sx * 0.6, DECK_Y + 0.05, (backZ + frontZ) / 2, 0.06, 0.05, backZ - frontZ, '#40584f');
+          this.box(x + sx * 0.3, DECK_Y + 0.05, (backZ + frontZ) / 2, 0.06, 0.05, backZ - frontZ, '#40584f');
         }
         for (let i = 0; i < 3; i++) {
-          const yaw = (1 - i) * 0.34;
+          // 세 대 모두 정면(물 쪽)으로 평행하게. 좌우 대도 옆으로 벌어지지 않는다
+          const yaw = 0;
           const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
-          // 손잡이는 의자 앞에 모으고(0.4m 간격) 초릿대 쪽은 벌어진다
-          const bx = x + (i - 1) * 0.4;
+          // 대 간격 0.6m: 찌끼리 엉키지 않을 만큼만 띄운다
+          const bx = x + (i - 1) * 0.6;
           const sx = bx + fx * 0.65, sz = backZ + fz * 0.65;
           const marker = this.box(sx + fx * 0.17, DECK_Y + 0.09, sz + fz * 0.17, 0.16, 0.03, 0.16, '#eac67d');
           marker.material = new THREE.MeshLambertMaterial({ color: '#eac67d', emissive: '#40351a' });

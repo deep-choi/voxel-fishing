@@ -1,0 +1,137 @@
+/* ─────────────────────────────────────────────
+   모바일(터치) 화면. body.touch일 때만 적용된다.
+   · 가로 화면 기준. 노치·홈 막대를 피해(safe-area) 가장자리에 붙인다
+   · 손가락 크기 버튼(44px 이상), 키보드 글자(kbd)는 숨긴다
+   · 오른쪽 아래 상황 버튼은 지금 할 수 있는 동작만 (touch.ts)
+   · 휴대폰에서는 메뉴 패널이 화면을 꽉 채우고 오른쪽 위 ✕로 닫는다
+   ───────────────────────────────────────────── */
+
+body.touch {
+  --sat: env(safe-area-inset-top, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  height: 100dvh;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-text-size-adjust: 100%;
+}
+body.touch #stage, body.touch #stage canvas { touch-action: none; }
+body.touch #hud button { touch-action: manipulation; }
+
+/* 키보드 안내는 터치에서 숨긴다 */
+body.touch :is(.hot > kbd, .hub-tile kbd, .btn kbd, .catch-card kbd) { display: none; }
+body.touch .prompt { display: none; }
+.keys-touch, .help-touch { display: none; }
+body.touch .keys-desk, body.touch .help-desk { display: none; }
+body.touch .keys-touch, body.touch .help-touch { display: block; }
+.sheet-x { display: none; }
+
+/* ── 항상 보이는 것: 가장자리에 붙이고 노치를 피한다 ── */
+body.touch .net-gauge { top: calc(8px + var(--sat)); left: calc(8px + var(--sal)); width: 54px; height: 54px; }
+body.touch .net-gauge .ng-in b { font-size: 12px; }
+body.touch .corner { top: calc(8px + var(--sat)); right: calc(8px + var(--sar)); }
+body.touch .clock { padding: 0 8px; }
+body.touch .hud-menu { width: 44px; height: 44px; padding: 0 12px; }
+body.touch .tour-pill { top: calc(10px + var(--sat)); }
+body.touch .place { top: calc(70px + var(--sat)); left: calc(8px + var(--sal)); }
+body.touch .pip { top: calc(60px + var(--sat)); right: calc(8px + var(--sar)); width: 84px; height: 112px; }
+body.touch .toasts { top: calc(64px + var(--sat)); }
+body.touch .toast { max-width: 60vw; white-space: normal; text-align: center; }
+
+/* 핫바: 가운데 아래. 칸을 눌러 대를 바꾼다 */
+body.touch .mc-hud { bottom: calc(6px + var(--sab)); }
+body.touch .hotbar .slot { width: 42px; height: 42px; }
+body.touch .hotbar .slot .slot-art { width: 26px; height: 26px; }
+
+/* 캐스팅 힘·장력계: 엄지에 가리지 않게 가운데 */
+body.touch .power { top: calc(50% + 18px); }
+body.touch .fight { bottom: calc(64px + var(--sab)); width: min(300px, 38vw); left: 50%; margin-left: 0; transform: translateX(-50%); padding: 6px 10px; }
+
+/* ── 조이스틱: 엄지를 대기 전에는 왼쪽 아래에 희미하게 ── */
+body.touch .stick { left: calc(84px + var(--sal)); top: calc(100% - 92px - var(--sab)); width: 104px; height: 104px; border-radius: 50%; opacity: 0.35; }
+body.touch .stick i { border-radius: 50%; }
+body.touch .stick.on { opacity: 0.9; }
+
+/* ── 상황 버튼 (오른쪽 아래) ── */
+.touch-buttons { position: absolute; right: calc(14px + var(--sar, 0px)); bottom: calc(12px + var(--sab, 0px)); width: 0; height: 0; pointer-events: none; }
+.tbtn { position: absolute; pointer-events: auto; touch-action: none; display: grid; place-content: center; gap: 2px; padding: 0; font: inherit; font-size: 12px; line-height: 1.2; text-align: center;
+  color: #fff; text-shadow: 1px 1px #000; background: #4b5745d9; border: 2px solid #1d271b; border-radius: 50%;
+  box-shadow: inset 0 3px #ffffff33, inset 0 -3px #0000004d, 0 2px 6px #0006; user-select: none; -webkit-user-select: none; }
+.tbtn[hidden] { display: none; }
+.tbtn b { font-weight: 400; }
+.tbtn small { font-size: 9px; opacity: 0.8; }
+.tbtn.down { transform: scale(0.94); filter: brightness(1.25); }
+.tbtn.dim { opacity: 0.4; }
+.tbtn.main { right: 0; bottom: 0; width: 92px; height: 92px; font-size: 16px; }
+.tbtn.alt { right: 104px; bottom: 4px; width: 66px; height: 66px; font-size: 13px; }
+.tchips { position: absolute; right: 0; bottom: 104px; display: flex; flex-direction: row-reverse; gap: 8px; }
+.tbtn.chip { position: static; width: 56px; height: 44px; border-radius: 22px; font-size: 12px; }
+.tbtn.chip.on { background: #3f6b8ae6; outline: 2px solid #fff; }
+/* 동작별 색: 던지기·세우기 초록, 챔질 금색, 숙이기 청회색, 들기 갈색 */
+.tbtn[data-act="cast"], .tbtn[data-act="raise"] { background: #6f9443e6; }
+.tbtn[data-act="hookset"] { background: #b8902ae6; }
+.tbtn[data-act="lower"] { background: #4f6a7ae6; }
+.tbtn[data-act="interact"] { background: #8a6a3fe6; }
+.tbtn.main.alert { background: #d9803a; animation: tbtn-alert 0.7s ease-in-out infinite alternate; }
+@keyframes tbtn-alert { to { box-shadow: 0 0 0 8px #ffae6255, inset 0 3px #ffffff33; } }
+
+/* ── 조과 카드: 오른쪽, 화면 높이에 맞춰 ── */
+body.touch .catch { right: calc(12px + var(--sar)); }
+body.touch .catch-card { width: min(280px, 44vw); max-height: calc(100dvh - 16px - var(--sat) - var(--sab)); overflow-y: auto; overscroll-behavior: contain; }
+body.touch .catch-card .row .btn { min-height: 48px; }
+
+/* ── 메뉴·패널 ── */
+body.touch .modal .panel { overscroll-behavior: contain; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
+body.touch .panel :is(.btn, .choice, .platform-choice, .hub-tile) { min-height: 44px; }
+body.touch .panel .slot { width: 44px; height: 44px; }
+body.touch .hub-help summary { padding: 8px 0; }
+body.touch .help-touch { margin: 8px 0 0; padding-left: 16px; line-height: 2; }
+body.touch .help-touch b { font-weight: 400; color: var(--accent); }
+body.touch .sheet-x { position: fixed; top: calc(8px + var(--sat)); right: calc(8px + var(--sar)); z-index: 3; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; cursor: pointer;
+  background: #343c2c; border: 2px solid #1d271b; box-shadow: inset 2px 2px #6b7560, inset -2px -2px #20271b; }
+body.touch .sheet-x i { grid-area: 1 / 1; display: block; width: 20px; height: 3px; background: #f4f1e6; transform: rotate(45deg); }
+body.touch .sheet-x i + i { transform: rotate(-45deg); }
+
+/* 시작 화면: 스크롤되고 노치를 피한다 */
+body.touch .start { padding: calc(12px + var(--sat)) calc(12px + var(--sar)) calc(12px + var(--sab)) calc(12px + var(--sal)); overflow-y: auto; }
+body.touch .start .start-card { max-height: none; }
+body.touch .start-card .btn.primary { min-height: 52px; }
+
+/* ── 휴대폰(낮은 가로 화면·좁은 화면): 패널이 화면을 꽉 채운다 ── */
+@media (max-height: 600px), (max-width: 760px) {
+  body.touch .modal { place-items: stretch; background: #101a0fcc; }
+  body.touch .modal .panel:not(.small) { width: 100%; max-width: none; height: 100dvh; max-height: none; margin: 0; border-width: 0; border-radius: 0; box-shadow: none; overflow-y: auto;
+    padding: calc(12px + var(--sat)) calc(64px + var(--sar)) calc(16px + var(--sab)) calc(16px + var(--sal)); }
+  body.touch .modal .panel h2 { font-size: 18px; margin-bottom: 10px; }
+  body.touch .start .start-card { width: min(640px, 100%); padding: 18px; }
+  body.touch .start-card h1 { font-size: 30px; margin: 6px 0 8px; }
+  body.touch .start-card .lead { margin-bottom: 12px; }
+  body.touch .fishery-preview { height: 54px; }
+}
+
+/* 가로 휴대폰: 메뉴 칸은 4열 그대로 (세로 좁은 화면만 2열) */
+@media (max-height: 600px) and (orientation: landscape) {
+  body.touch .hub-grid { grid-template-columns: repeat(4, 1fr); }
+}
+
+/* 아주 낮은 가로 화면 (작은 휴대폰): 버튼·카드를 조금 줄인다 */
+@media (max-height: 400px) {
+  body.touch .tbtn.main { width: 82px; height: 82px; font-size: 15px; }
+  body.touch .tbtn.alt { right: 92px; width: 60px; height: 60px; }
+  body.touch .tchips { bottom: 92px; }
+  body.touch .hotbar .slot { width: 38px; height: 38px; }
+  body.touch .mc-xp { display: none; }
+  body.touch .pip { width: 72px; height: 96px; }
+  body.touch .catch-card { padding: 12px 14px; }
+  body.touch .catch-card h2 { font-size: 22px; margin-bottom: 6px; }
+  body.touch .catch-card .nums b { font-size: 22px; }
+  body.touch .catch-card .fish-icon { height: 52px; margin: 6px 0; }
+  body.touch .catch-card .row { margin-top: 10px; }
+}
+
+/* 세로로 들면: 휴대폰은 가로로 돌려 달라고 안내 (태블릿 세로는 넓어서 그대로 플레이) */
+@media (orientation: portrait) and (min-width: 700px) {
+  body.touch .rotate-note { display: none; }
+}
