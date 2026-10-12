@@ -1,0 +1,7 @@
+.size-rank { display: inline-block; vertical-align: middle; padding: 2px 6px; border: 1px solid currentColor; font-size: 10px; line-height: 1.5; font-weight: 700; white-space: nowrap; color: #58614f; background: #e1e3d5; }
+.size-rank.promising { color: #3f722e; background: #dceace; }
+.size-rank.large { color: #286e8e; background: #d6eaf2; }
+.size-rank.trophy { color: #946320; background: #f5e5ad; }
+.size-rank.legend { color: #7a388f; background: #ecd8f6; box-shadow: 1px 1px #50365c; }
+.catch-card .rank .size-rank { font-size: 15px; padding: 4px 12px; border-width: 2px; }
+.record-list .size-rank { margin: 4px 0 0; }

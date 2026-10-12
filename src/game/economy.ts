@@ -58,7 +58,7 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'first', name: '첫 손맛', desc: '처음으로 물고기를 낚는다', coins: 50, check: count(1) },
   { id: 'c50', name: '단골 조사', desc: '물고기 50마리를 낚는다', coins: 400, check: count(50) },
   { id: 'c200', name: '버들못 터줏대감', desc: '물고기 200마리를 낚는다', coins: 1500, check: count(200) },
-  { id: 'wolchuk', name: '월척', desc: '30.3cm 이상의 붕어를 낚는다', coins: 500, check: s => [s.catches.some(c => c.species === 'crucian' && c.cm >= 30.3) ? 1 : 0, 1] },
+  { id: 'wolchuk', name: '첫 붕어 대물', desc: '대물 등급 붕어를 낚는다 (30.3cm 이상)', coins: 500, check: s => [s.catches.some(c => c.species === 'crucian' && c.cm >= 30.3) ? 1 : 0, 1] },
   { id: 'meter', name: '미터급', desc: '100cm 넘는 고기를 낚는다', coins: 3000, check: s => [s.catches.some(c => c.cm >= 100) ? 1 : 0, 1] },
   { id: 'heavy', name: '묵직한 손맛', desc: '10kg 넘는 고기를 낚는다', coins: 1200, check: s => [s.catches.some(c => c.kg >= 10) ? 1 : 0, 1] },
   { id: 'dex5', name: '어류 관찰자', desc: '5종을 도감에 올린다', coins: 300, check: s => [Math.min(5, new Set(s.catches.map(c => c.species)).size), 5] },

@@ -1,4 +1,5 @@
 import { createExtraSpecies } from './extraSpecies';
+import { SIZE_RANKS } from './sizeRanks';
 import { FISH_LOOKS, type FishLook } from './fishArt';
 export type { FishLook } from './fishArt';
 // 어종과 채비 데이터. 수심·출현율·장비 수치는 게임 밸런스다.
@@ -178,7 +179,7 @@ const BASE_SPECIES: Record<'crucian' | 'carp' | 'bluegill', Species> = {
   crucian: {
     id: 'crucian',
     name: '붕어',
-    len: { median: 21, sigma: 0.24, min: 9, max: 46 },
+    len: { median: 21, sigma: 0.24, min: 9, max: 55 },
     wa: 0.0186,
     wb: 3.0,
     depth: [0.6, 2.0, 4.5],
@@ -190,17 +191,13 @@ const BASE_SPECIES: Record<'crucian' | 'carp' | 'bluegill', Species> = {
     speed: 1.6,
     stamina: [11, 14],
     bite: 'rise',
-    ranks: [
-      ['4짜', 40],
-      ['월척', 30.3],
-      ['준척', 27],
-    ],
+    ranks: SIZE_RANKS.crucian,
     look: FISH_LOOKS.crucian,
   },
   carp: {
     id: 'carp',
     name: '잉어',
-    len: { median: 52, sigma: 0.24, min: 28, max: 98 },
+    len: { median: 52, sigma: 0.24, min: 28, max: 110 },
     wa: 0.0135,
     wb: 3.05,
     depth: [1.4, 3.6, 7],
@@ -212,11 +209,7 @@ const BASE_SPECIES: Record<'crucian' | 'carp' | 'bluegill', Species> = {
     speed: 3.0,
     stamina: [16, 6],
     bite: 'sink',
-    ranks: [
-      ['미터급', 100],
-      ['대물', 80],
-      ['준대물', 65],
-    ],
+    ranks: SIZE_RANKS.carp,
     look: FISH_LOOKS.carp,
   },
   bluegill: {
@@ -234,7 +227,7 @@ const BASE_SPECIES: Record<'crucian' | 'carp' | 'bluegill', Species> = {
     speed: 1.3,
     stamina: [6, 20],
     bite: 'jitter',
-    ranks: [['대형', 20]],
+    ranks: SIZE_RANKS.bluegill,
     look: FISH_LOOKS.bluegill,
   },
 };
@@ -244,7 +237,7 @@ export const SPECIES: Record<SpeciesId, Species> = { ...BASE_SPECIES,
   mirror: { ...BASE_SPECIES.carp, id: 'mirror', name: '향어',
     len: { median: 45, sigma: 0.26, min: 22, max: 90 }, depth: [1.8, 4.8, 8],
     baits: { worm: 0.35, paste: 1.45, corn: 0.8, gluten: 0.4, pellet: 1.7, shrimp: 0.3 }, abundance: 0.42, power: 1.65,
-    stamina: [18, 7], ranks: [['대물', 75], ['준대물', 60]],
+    stamina: [18, 7], ranks: SIZE_RANKS.mirror,
     look: FISH_LOOKS.mirror },
 };
 export const SPECIES_LIST = Object.values(SPECIES);

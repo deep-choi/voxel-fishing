@@ -15,7 +15,7 @@ service cloud.firestore {
         && seat.updatedAt > request.time - duration.value(150, 's');
     }
     function validSpecies(id) { return id in ['crucian', 'carp', 'mirror', 'bluegill', 'catfish', 'yellowcat', 'snakehead', 'mandarin', 'bass']; }
-    function maxLength(id) { return {'crucian':46, 'carp':110, 'mirror':90, 'bluegill':25, 'catfish':115, 'yellowcat':42, 'snakehead':110, 'mandarin':65, 'bass':65}[id]; }
+    function maxLength(id) { return {'crucian':55, 'carp':110, 'mirror':90, 'bluegill':25, 'catfish':115, 'yellowcat':42, 'snakehead':110, 'mandarin':65, 'bass':65}[id]; }
     function validProfile(uid) {
       let d = request.resource.data;
       return owner(uid) && d.keys().hasOnly(['uid','nickname','nicknameKey','createdAt','updatedAt','lastChatAt','lastMessageId'])

@@ -413,7 +413,7 @@ export class Hud {
     const full = p.keepnet.length >= p.keepnetSpec.capacity;
     const keepNote = small ? `금지 체장(${SPECIES_RULES[c.species.id].minKeepCm}cm) 미만이라 보관할 수 없어요` : full ? `살림망이 가득 찼어요 (${p.keepnetSpec.capacity}마리). 판매하거나 더 큰 살림망을 쓰세요` : '';
     box.innerHTML = `<div class="catch-card">
-  ${c.rank ? `<p class="rank">${c.rank}!</p>` : ''}
+  <p class="rank">${P.sizeRankBadge(c.species.id, c.cm)}</p>
   <div class="fish-icon">${fishIcon(c.species.look)}</div><h2>${c.species.name}</h2>
   ${bounty ? '<p class="tag bad">생태계교란종 · 방생 금지</p>' : ''}
   <div class="nums"><div><b>${c.cm.toFixed(1)}</b><span>cm</span></div><div><b>${c.kg < 1 ? Math.round(c.kg * 1000) : c.kg.toFixed(2)}</b><span>${c.kg < 1 ? 'g' : 'kg'}</span></div></div>

@@ -13,10 +13,17 @@ import { fishIcon, itemIcon } from './pixelIcons';
 import type { Settings } from './settings';
 import type { OnlineState, OnlineTab } from '../game/onlineState';
 import type { FisheryId } from '../game/fisheries';
+import { rankOf } from '../game/data';
+import './sizeRanks.css';
 import { hookSizeLabel, lineDiameter } from '../game/rigMechanics';
 
 // 패널 화면들: 상태를 받아 HTML 문자열을 돌려준다. 클릭은 data-act로 hud.ts가 처리한다.
 
+export function sizeRankBadge(id: SpeciesId, cm: number) {
+  const name = rankOf(SPECIES[id], cm) ?? '일반';
+  const tone = name === '전설급' ? 'legend' : name === '초대물' ? 'trophy' : name === '대물' ? 'large' : name === '준대물' ? 'promising' : 'normal';
+  return `<span class="size-rank ${tone}">${name}</span>`;
+}
 export const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 export const kgText = (kg: number) => (kg < 1 ? `${Math.round(kg * 1000)}g` : `${kg.toFixed(2)}kg`);
 const won = (n: number) => `${Math.round(n).toLocaleString()}원`;
@@ -91,7 +98,7 @@ function onlinePanel(c: PanelCtx, tab: Exclude<OnlineTab, 'chat'>) {
     body = `${tabs('online-scope', ui.onlineScope, [['all', '전체 낚시터'], [ACTIVE_FISHERY.id, ACTIVE_FISHERY.name]])}
       ${tabs('online-species', ui.onlineSpecies, SPECIES_LIST.map(sp => [sp.id, sp.name]))}
       <p class="depth-note">${SPECIES[ui.onlineSpecies].name} 최대 길이 · 상위 20명 · 로그인 후 잡은 고기가 반영됩니다.</p>
-      ${s.loadingRanking ? '<p class="empty">랭킹을 불러오는 중…</p>' : s.rankings.length ? `<ol class="online-ranking">${s.rankings.map((r, i) => `<li class="${r.uid === s.uid ? 'me' : ''}"><span>${i + 1}</span><b>${esc(r.nickname)}</b><strong>${r.cm.toFixed(1)}cm</strong><small>${kgText(r.kg)} · ${(findFishery(r.fisheryId) ?? FISHERIES[0]).name}</small></li>`).join('')}</ol>` : '<p class="empty">아직 등록된 기록이 없어요.</p>'}`;
+      ${s.loadingRanking ? '<p class="empty">랭킹을 불러오는 중…</p>' : s.rankings.length ? `<ol class="online-ranking">${s.rankings.map((r, i) => `<li class="${r.uid === s.uid ? 'me' : ''}"><span>${i + 1}</span><b>${esc(r.nickname)}</b><strong>${r.cm.toFixed(1)}cm</strong><small>${sizeRankBadge(ui.onlineSpecies, r.cm)} ${kgText(r.kg)} · ${(findFishery(r.fisheryId) ?? FISHERIES[0]).name}</small></li>`).join('')}</ol>` : '<p class="empty">아직 등록된 기록이 없어요.</p>'}`;
   }
   return `<div class="panel ${tab === 'ranking' ? 'wide' : ''} online-panel"><h2>${tab === 'account' ? '계정' : '온라인 최대어 랭킹'}</h2>
     ${s.error ? `<p class="warn" role="alert">${esc(s.error)}</p>` : ''}${body}${close(tab === 'ranking' ? 'L' : 'Esc')}</div>`;
@@ -181,7 +188,7 @@ export function keepnetPanel(c: PanelCtx) {
 export function marketPanel(c: PanelCtx) {
   const p = c.player;
   const value = (id: string | undefined) => p.data.catches.find(r => r.id === id)?.value ?? 0;
-  const rows = p.keepnet.map(f => `<li><span class="net-icon">${fishIcon(f.species.look)}</span><b>${f.species.name}</b><span>${f.cm.toFixed(1)}cm</span><span>${kgText(f.kg)}</span><span>${won(value(f.id))}</span>
+  const rows = p.keepnet.map(f => `<li><span class="net-icon">${fishIcon(f.species.look)}</span><b>${f.species.name} ${sizeRankBadge(f.species.id, f.cm)}</b><span>${f.cm.toFixed(1)}cm</span><span>${kgText(f.kg)}</span><span>${won(value(f.id))}</span>
     <button class="btn small" data-act="sell-one" data-id="${f.id}">판매</button></li>`).join('');
   const market = SPECIES_LIST.map(sp => {
     const m = marketMul(sp.id);
@@ -192,7 +199,7 @@ export function marketPanel(c: PanelCtx) {
   <p class="kicker">관리동 · ${won(p.data.coins)} 보유</p><h2>어시장 <small>살림망 ${p.keepnet.length}마리</small></h2>
   ${rows ? `<ul class="net">${rows}</ul>` : '<p class="empty">팔 고기가 없어요. 살림망에 고기를 담아 오세요</p>'}
   <button class="btn primary" data-act="sell" ${p.keepnet.length ? '' : 'disabled'}>모두 판매 · ${won(sum)}</button>
-  <h3>오늘의 시세 <small>매일 바뀝니다. 기록 등급(월척·대물)은 더 비싸게 팔려요</small></h3>
+  <h3>오늘의 시세 <small>매일 바뀝니다. 높은 크기 등급일수록 더 비싸게 팔려요</small></h3>
   <ul class="market">${market}</ul>
   ${close('N')}
 </div>`;
@@ -325,7 +332,7 @@ export function collectionPanel(c: PanelCtx) {
     const density = ACTIVE_FISHERY.population[sp.id];
     const tags = [rule.bounty ? '<span class="tag bad">생태계교란종 · 방생 금지</span>' : '', rule.minKeepCm ? `<span class="tag">금지 체장 ${rule.minKeepCm}cm</span>` : ''].join('');
     return `<article class="species-card ${catches.length ? 'discovered' : ''}"><span class="species-status">${catches.length ? `${catches.length}마리 기록` : '미발견'}</span><div class="fish-icon">${fishIcon(sp.look)}</div><h3>${sp.name}</h3>${tags}
-      <p>선호 수심 ${sp.depth[0]}~${sp.depth[2]}m · 활동 ${ACTIVE_TEXT[rule.active]}<br>현재 낚시터: ${density === 0 ? '출현 없음' : density >= 1.5 ? '많음' : density >= 0.7 ? '보통' : '드묾'}<br>주요 서식지 ${habitats || '전 낚시터에서 드물게 출현'}<br>${BITE_DESCRIPTIONS[sp.bite]}</p><div class="bait-affinities">${baits}</div><p>시세 ${won(rule.perKg * marketMul(sp.id))}/kg · 등급 ${sp.ranks.map(([n, cm]) => `${n} ${cm}cm`).join(' · ')}</p>
+      <p>선호 수심 ${sp.depth[0]}~${sp.depth[2]}m · 활동 ${ACTIVE_TEXT[rule.active]}<br>현재 낚시터: ${density === 0 ? '출현 없음' : density >= 1.5 ? '많음' : density >= 0.7 ? '보통' : '드묾'}<br>주요 서식지 ${habitats || '전 낚시터에서 드물게 출현'}<br>${BITE_DESCRIPTIONS[sp.bite]}</p><div class="bait-affinities">${baits}</div><p>시세 ${won(rule.perKg * marketMul(sp.id))}/kg · 등급 ${sp.ranks.slice().reverse().map(([n, cm]) => `${n} ${cm}cm↑`).join(' → ')}</p>
       <b>최대어 ${p.best[sp.id] ? `${p.best[sp.id].toFixed(1)}cm` : '—'}</b></article>`;
   }).join('')}</div>${close('V')}</div>`;
 }
@@ -338,7 +345,7 @@ export function recordsPanel(c: PanelCtx) {
   return `<div class="panel"><p class="kicker">싱글 플레이 · 개인 기록</p><h2>나의 최대어 순위</h2>
     ${tabs('record-species', c.ui.recordSpecies, SPECIES_LIST.map(sp => [sp.id, sp.name]))}
     ${tabs('record-period', c.ui.weekly ? 'week' : 'all', [['all', '전체 기록'], ['week', '이번 주']])}
-    ${records.length ? `<ol class="record-list">${records.map((r, i) => `<li><span>${i + 1}</span><b>${r.cm.toFixed(1)}cm</b><small>${kgText(r.kg)} · ${(findFishery(r.fisheryId) ?? FISHERIES[0]).name} ${r.platform}번 좌대</small><small>${new Date(r.at).toLocaleDateString('ko-KR')} · ${r.kept ? '보관' : r.released ? '방생' : '수매'}</small></li>`).join('')}</ol>` : '<p class="empty">이 어종을 잡으면 기록이 남아요.</p>'}
+    ${records.length ? `<ol class="record-list">${records.map((r, i) => `<li><span>${i + 1}</span><b>${r.cm.toFixed(1)}cm</b><small>${sizeRankBadge(r.species, r.cm)} ${kgText(r.kg)} · ${(findFishery(r.fisheryId) ?? FISHERIES[0]).name} ${r.platform}번 좌대</small><small>${new Date(r.at).toLocaleDateString('ko-KR')} · ${r.kept ? '보관' : r.released ? '방생' : '수매'}</small></li>`).join('')}</ol>` : '<p class="empty">이 어종을 잡으면 기록이 남아요.</p>'}
     ${close('J')}</div>`;
 }
 
