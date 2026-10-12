@@ -171,9 +171,8 @@ let tournament: Tournament | null = null;
 const idleGame = new Fishing(PLAYER, player, grounds);
 idleGame.setRig(player.data.rig);
 let game = idleGame;
-// 지금은 기능 확인용 빠른 모드가 기본. ?fast=0 으로 원래 속도를 사용한다.
-idleGame.fastTest = params.get('fast') !== '0';
-if (idleGame.fastTest) idleGame.biteBoost = 40;
+// 기본은 일반 낚시. 기능 확인이 필요할 때만 ?fast=1로 디버그 모드를 켠다.
+idleGame.fastTest = params.get('fast') === '1';
 const mounted = new Map<string, MountedRod>();
 let active: MountedRod | null = null;
 let handBlend = 0;

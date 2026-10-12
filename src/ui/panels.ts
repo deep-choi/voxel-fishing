@@ -13,6 +13,7 @@ import { fishIcon, itemIcon } from './pixelIcons';
 import type { Settings } from './settings';
 import type { OnlineState, OnlineTab } from '../game/onlineState';
 import type { FisheryId } from '../game/fisheries';
+import { hookSizeLabel, lineDiameter } from '../game/rigMechanics';
 
 // 패널 화면들: 상태를 받아 HTML 문자열을 돌려준다. 클릭은 data-act로 hud.ts가 처리한다.
 
@@ -123,11 +124,11 @@ export function setupPanel(c: PanelCtx) {
   if (ui.rigStep === 'rod') options = RODS.map(r => choice(r.id === g.rodId, 'rig', 'rod', r.id, (d.rods[r.id] ?? 0) > 0, itemIcon('rod', r.id), rarityName(r.rarity, r.name),
     `${r.desc}<br>길이 ${r.length}m · 원줄 ${r.line}m · 힘 ${r.power}kg<br>보유 ${d.rods[r.id] ?? 0}대 ${wearBar(p.wearOf(`rod:${r.id}`))}`)).join('');
   if (ui.rigStep === 'line') options = LINES.map((l, i) => choice(i === g.lineIdx, 'line', 'line', String(i), d.lines.includes(l.id), itemIcon('line'), rarityName(l.rarity, l.name),
-    `${l.desc}<br>${l.strength.toFixed(1)}kg에 끊어짐 · 눈에 띔 ${Math.round(l.visibility * 100)}%<br>${d.lines.includes(l.id) ? wearBar(p.wearOf(`line:${l.id}`)) : '미보유'}`)).join('');
+    `${l.desc}<br>게임 굵기 ${lineDiameter(l).toFixed(3)}mm · ${l.strength.toFixed(1)}kg에 끊어짐<br>${d.lines.includes(l.id) ? wearBar(p.wearOf(`line:${l.id}`)) : '미보유'}`)).join('');
   if (ui.rigStep === 'float') options = FLOATS.map(f => choice(f.id === g.floatId, 'rig', 'float', f.id, d.floats.includes(f.id), itemIcon('float'), rarityName(f.rarity, f.name),
     `${f.desc}<br>예민함 ${f.sensitivity} · ${f.glow ? '야간 발광' : '야간 안 보임'}${d.floats.includes(f.id) ? '' : '<br>미보유'}`)).join('');
   if (ui.rigStep === 'hook') options = HOOKS.map(h => choice(h.id === g.hookId, 'rig', 'hook', h.id, d.hooks.includes(h.id), itemIcon('hook'), rarityName(h.rarity, h.name),
-    `${h.desc}<br>걸림 ${h.hold} · 유인 ${h.attraction}${d.hooks.includes(h.id) ? '' : '<br>미보유'}`)).join('');
+    `${h.desc}<br>${hookSizeLabel(h)} · 유지력 ${h.hold}${d.hooks.includes(h.id) ? '' : '<br>미보유'}`)).join('');
   if (ui.rigStep === 'bait') {
     options = Object.values(BAITS).map(b => choice(g.bait === b.id && !g.baitProductId, 'bait', 'bait', b.id, d.baits[b.id] > 0, itemIcon(b.id), `<b>${b.name} 공용 · ${d.baits[b.id]}${b.unit ?? '회분'}</b>`, esc(b.desc))).join('')
       + choice(!g.chumProductId, 'rig', 'chum', 'chum', d.baits.chum > 0, itemIcon('chum'), '<b>공용 집어 떡밥</b>', '4 / G로 뿌리기')
@@ -146,6 +147,8 @@ export function setupPanel(c: PanelCtx) {
     <div class="rig-options">${ui.rigStep === 'depth' ? depth : `<div class="choices">${options}</div>`}</div>
   </div>
   <div class="rig-stats">
+    <span>줄 굵기 <b>${lineDiameter(g.line).toFixed(3)}mm</b></span>
+    <span>채비 예민함 <b>${g.rigSensitivity.toFixed(2)}</b></span>
     <span>최대 하중 <b>${maxLoad.toFixed(1)}kg</b></span>
     <span>원줄 ${wearBar(lineWear)}</span>
     <span>낚싯대 ${wearBar(rodWear)}</span>
@@ -216,10 +219,10 @@ function inventoryItems(c: PanelCtx): InvItem[] {
   for (const l of LINES) if (d.lines.includes(l.id)) {
     const wear = p.wearOf(`line:${l.id}`);
     items.push({ key: `line:${l.id}`, name: l.name, rarity: l.rarity, icon: itemIcon('line'), count: '', desc: l.desc,
-      lines: [`${l.strength}kg에 끊어짐`, wearBar(wear)], actions: [wear > 0.01 ? `<button class="btn small" data-act="repair" data-id="line:${l.id}">새 줄 감기 · ${won(p.repairCost(`line:${l.id}`))}</button>` : ''] });
+      lines: [`게임 굵기 ${lineDiameter(l).toFixed(3)}mm · ${l.strength}kg에 끊어짐`, wearBar(wear)], actions: [wear > 0.01 ? `<button class="btn small" data-act="repair" data-id="line:${l.id}">새 줄 감기 · ${won(p.repairCost(`line:${l.id}`))}</button>` : ''] });
   }
   for (const f of FLOATS) if (d.floats.includes(f.id)) items.push({ key: `float:${f.id}`, name: f.name, rarity: f.rarity, icon: itemIcon('float'), count: '', desc: f.desc, lines: [`예민함 ${f.sensitivity}${f.glow ? ' · 야간 발광' : ''}`], actions: [] });
-  for (const h of HOOKS) if (d.hooks.includes(h.id)) items.push({ key: `hook:${h.id}`, name: h.name, rarity: h.rarity, icon: itemIcon('hook'), count: '', desc: h.desc, lines: [`걸림 ${h.hold} · 유인 ${h.attraction}`], actions: [] });
+  for (const h of HOOKS) if (d.hooks.includes(h.id)) items.push({ key: `hook:${h.id}`, name: h.name, rarity: h.rarity, icon: itemIcon('hook'), count: '', desc: h.desc, lines: [hookSizeLabel(h), `유지력 ${h.hold}`], actions: [] });
   for (const n of NETS) if (d.nets.includes(n.id)) items.push({ key: `net:${n.id}`, name: n.name, rarity: n.rarity, icon: itemIcon('net'), count: d.net === n.id ? 'E' : '', desc: n.desc,
     lines: [`${n.maxKg}kg까지 안전하게 떠냄`], actions: [d.net === n.id ? '<span class="tag">장착 중</span>' : `<button class="btn small" data-act="equip" data-kind="net" data-id="${n.id}">장착</button>`] });
   for (const k of KEEPNETS) if (d.keepnets.includes(k.id)) items.push({ key: `keepnet:${k.id}`, name: k.name, rarity: k.rarity, icon: itemIcon('keepnet'), count: d.keepnetId === k.id ? 'E' : '', desc: k.desc,
@@ -291,8 +294,8 @@ export function shopPanel(c: PanelCtx) {
         + INGREDIENTS.map(i => card('ingredient', { ...i, name: `${i.name} ${i.count}개` }, itemIcon(i.id), `재고 ${d.ingredients[i.id]}`)).join('');
       break;
     case 'rod': body = RODS.map(r => card('rod', r, itemIcon('rod', r.id), `길이 ${r.length}m · 힘 ${r.power}kg · 보유 ${d.rods[r.id] ?? 0}대`)).join(''); break;
-    case 'line': body = LINES.map(l => card('line', l, itemIcon('line'), `${l.strength}kg에 끊어짐`)).join(''); break;
-    case 'terminal': body = FLOATS.map(f => card('float', f, itemIcon('float'), `예민함 ${f.sensitivity}`)).join('') + HOOKS.map(h => card('hook', h, itemIcon('hook'), `걸림 ${h.hold}`)).join(''); break;
+    case 'line': body = LINES.map(l => card('line', l, itemIcon('line'), `게임 굵기 ${lineDiameter(l).toFixed(3)}mm · ${l.strength}kg에 끊어짐`)).join(''); break;
+    case 'terminal': body = FLOATS.map(f => card('float', f, itemIcon('float'), `예민함 ${f.sensitivity}`)).join('') + HOOKS.map(h => card('hook', h, itemIcon('hook'), `${hookSizeLabel(h)} · 유지력 ${h.hold}`)).join(''); break;
     case 'net': body = NETS.map(n => card('net', n, itemIcon('net'), `${n.maxKg}kg까지`)).join('') + KEEPNETS.map(k => card('keepnet', k, itemIcon('keepnet'), `${k.capacity}마리 보관`)).join(''); break;
     case 'repair': {
       const worn = [...RODS.filter(r => d.rods[r.id]).map(r => [`rod:${r.id}`, r.name, itemIcon('rod', r.id)]), ...LINES.filter(l => d.lines.includes(l.id)).map(l => [`line:${l.id}`, l.name, itemIcon('line')])]

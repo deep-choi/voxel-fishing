@@ -3,11 +3,12 @@ import { heightAt, PLAYER, spotQuality, waterDepth, WATER_Y } from '../world/lak
 import { smoothstep } from '../world/noise';
 import { BAITS, FLOATS, HOOKS, LINES, RODS, SPECIES_LIST, rankOf, weightKg, type BaitId, type Species } from './data';
 import { baitProduct } from './realCatalog';
-import { encounterRates, biteProbability, pickEncounter, type EncounterRate } from './ecology';
+import { encounterRates, biteProbability, pickEncounter, pickEncounterLength, type EncounterRate } from './ecology';
 import { ACTIVE_FISHERY } from './fisheries';
 import { FishingGrounds } from './grounds';
 import type { Rig } from './profile';
 import { mods } from './modifiers';
+import { baitPresentation, hookFit, hookHoldingPower, hookSetChance, rigSensitivity } from './rigMechanics';
 
 // 민장대 찌낚시 한 판의 규칙: 앞치기 → 찌 서기 → 입질 → 챔질 → 대 세워 버티기 → 랜딩.
 // 릴이 없어 줄 길이는 고정. 고기는 대를 세우고 숙여서 다룬다.
@@ -168,6 +169,8 @@ export class Fishing {
   private restTilt = 0;
   private restDy = 0;
   private bite: Bite | null = null;
+  private approachRates: EncounterRate[] | null = null;
+  private approachAt = 0;
   private biteCooldown = 4;
   private slackT = 0;
   private prevStretch = 0;
@@ -204,6 +207,7 @@ export class Fishing {
     return { ...base, power: base.power * mods.rodPower(base.id) };
   }
   get floatSpec() { return FLOATS.find(f => f.id === this.floatId) ?? FLOATS[0]; }
+  get rigSensitivity() { return rigSensitivity(this.line, this.hook, this.floatSpec); }
   get hook() { return HOOKS.find(h => h.id === this.hookId) ?? HOOKS[0]; }
   get baitProduct() { const p = baitProduct(this.baitProductId); return p && p.baseBait === this.bait ? p : undefined; }
   get baitName() { return this.baitProduct?.name ?? BAITS[this.bait].name; }
@@ -398,7 +402,7 @@ export class Fishing {
       b.t += dt;
       [dy, dx] = sampleKeys(b.keys, b.t);
       const vis = 1 - this.restTilt * 0.8;
-      dy *= vis * this.floatSpec.sensitivity;
+      dy *= vis * this.rigSensitivity;
       dy = THREE.MathUtils.clamp(dy, -0.5, 0.34);
       // 찌가 올라올 때는 물결이 없다. 빨려 들어가거나 끌려갈 때만 수면이 흔들린다
       const prev = THREE.MathUtils.clamp(prevDy * vis * this.floatSpec.sensitivity, -0.5, 0.34);
@@ -458,7 +462,7 @@ export class Fishing {
   /** 채비를 걷은 상태에서도 정면 포인트를 기준으로 선호도 안내를 보여준다. */
   ratesAt(x: number, z: number): EncounterRate[] {
     return encounterRates({ waterDepth: waterDepth(x, z), baitDepth: this.depthSet, bait: this.bait, product: this.baitProduct,
-      spotQuality: seed => spotQuality(x, z, seed), visibility: this.line.visibility, hookAttraction: this.hook.attraction,
+      spotQuality: seed => spotQuality(x, z, seed), line: this.line, hook: this.hook, sensitivity: this.rigSensitivity,
       chum: sp => this.grounds.attraction(x, z, sp), environment: sp => mods.bite(sp) });
   }
   get encounterForecast() {
@@ -473,15 +477,17 @@ export class Fishing {
   }
 
   private rollApproach(dt: number) {
-    const rates = this.biteRates();
+    // 물고기 씨알까지 계산하므로 같은 포인트의 분포는 0.5초 동안 재사용한다.
+    if (!this.approachRates || this.t >= this.approachAt) { this.approachRates = this.biteRates(); this.approachAt = this.t + 0.5; }
+    const rates = this.approachRates;
     const total = rates.reduce((n, r) => n + r.perMin, 0);
     if (total <= 0) return;
-    // 빠른 확인 모드는 대기만 줄이고, 미끼·맵에 따른 어종 비율은 그대로 유지한다.
-    const rate = this.fastTest ? 150 : total * this.biteBoost;
+    // 명시적인 디버그 모드에서도 불리한 채비의 낮은 입질률을 보존한다.
+    const rate = total * this.biteBoost * (this.fastTest ? 30 : 1);
     if (Math.random() >= biteProbability(rate, dt)) return;
     const species = pickEncounter(rates);
     if (!species) return;
-    this.bite = makeBite(species);
+    this.bite = makeBite(species, pickEncounterLength(rates.find(row => row.sp.id === species.id)!));
     this.emit({ type: 'bite' });
   }
 
@@ -500,24 +506,28 @@ export class Fishing {
   private doHookset() {
     this.sinceJerk = 0;
     if (this.phase !== 'waiting' && this.phase !== 'settling') return;
+    let failedPenetration = false;
     const b = this.phase === 'waiting' && !this.floatOnLand ? this.bite : null;
     if (b) {
-      const pad = mods.hookWindow;
+      const pad = Math.max(-0.22, mods.hookWindow + (this.rigSensitivity - 1) * 0.18);
       const w = this.fastTest ? b.windows[0] : b.windows.find((w) => b.t >= w.t0 - pad && b.t <= w.t1 + pad);
       if (w) {
         const perfect = b.t >= w.p0 && b.t <= w.p1;
-        this.bite = null;
-        this.emit({ type: 'hookset', hit: true });
-        this.startFight(b, perfect ? 'perfect' : 'good');
-        this.emit({ type: 'toast', text: perfect ? '정확한 챔질!' : '걸었다!', tone: 'good' });
-        return;
+        if (Math.random() < hookSetChance(b.sp, b.cm, this.hook, this.bait, perfect)) {
+          this.bite = null;
+          this.emit({ type: 'hookset', hit: true });
+          this.startFight(b, perfect ? 'perfect' : 'good');
+          this.emit({ type: 'toast', text: perfect ? '정확한 챔질!' : '걸었다!', tone: 'good' });
+          return;
+        }
+        failedPenetration = true;
       }
       // 너무 일찍 또는 늦게: 고기가 놀라 달아난다
       this.bite = null;
       this.biteCooldown = rand(8, 18);
     }
     this.emit({ type: 'hookset', hit: false });
-    this.emit({ type: 'toast', text: b ? '헛챔질 — 채비가 물 밖으로 나왔어요' : '대를 들어 채비를 걷었어요', tone: b ? 'bad' : 'info' });
+    this.emit({ type: 'toast', text: failedPenetration ? '바늘이 제대로 박히지 않았어요 · 바늘 크기와 미끼를 확인하세요' : b ? '헛챔질 — 채비가 물 밖으로 나왔어요' : '대를 들어 채비를 걷었어요', tone: b ? 'bad' : 'info' });
     if (!this.floatOnLand) this.emit({ type: 'ripple', x: this.float.x, z: this.float.z, size: 0.6 });
     this.retrieve();
   }
@@ -527,7 +537,7 @@ export class Fishing {
   private startFight(b: Bite, quality: 'perfect' | 'good' | 'poor') {
     this.fightTime = 0;
     const kg = weightKg(b.sp, b.cm);
-    const hold = quality === 'perfect' ? Infinity : quality === 'good' ? rand(2.2, 4.5) : rand(1.2, 2.8);
+    const hold = hookHoldingPower(b.sp, b.cm, this.hook, this.bait, quality) * rand(0.94, 1.06);
     this.fish = {
       sp: b.sp,
       cm: b.cm,
@@ -539,8 +549,8 @@ export class Fishing {
       behavior: 'run',
       bTime: rand(1.5, 3),
       dir: this.awayDir(rand(-1, 1)),
-      hookHold: hold * this.hook.hold,
-      slackRisk: quality === 'perfect' ? 0.5 : quality === 'good' ? 1 : 1.6,
+      hookHold: hold,
+      slackRisk: (quality === 'perfect' ? 0.5 : quality === 'good' ? 1 : 1.6) / Math.max(0.25, hookFit(b.sp, b.cm, this.hook) * baitPresentation(this.hook, this.bait)),
       splashT: 0,
     };
     this.liftT = 0;
@@ -830,8 +840,7 @@ function rollLength(sp: Species): number {
   return Math.round(THREE.MathUtils.clamp(cm, sp.len.min, sp.len.max) * 10) / 10;
 }
 
-function makeBite(sp: Species): Bite {
-  const cm = rollLength(sp);
+function makeBite(sp: Species, cm = rollLength(sp)): Bite {
   const big = THREE.MathUtils.clamp((cm - sp.len.median) / (sp.len.max - sp.len.median), -0.5, 1);
   const keys: [number, number, number][] = [[0, 0, 0]];
   const windows: BiteWindow[] = [];
