@@ -62,10 +62,10 @@ const LINE_SERIES: LineSeries[] = [
     stages: [[1.65, 0.02, 120], [2.15, 0.01, 680], [2.7, 0, 2200], [3.3, 0, 6500]] },
   { id: 'clearline', name: '청류 정밀', go: '1.5', diameterMm: 0.205, purpose: '붕어 · 가는 줄 균형',
     desc: '예민한 붕어와 작은 잉어용. 굵기를 유지하며 강도와 수중 시인성을 개선한다',
-    stages: [[2.6, 0.08, 180], [3.5, 0.05, 950], [4.5, 0.03, 3200], [5.5, 0.01, 8200]] },
+    stages: [[3.0, 0.08, 180], [3.5, 0.05, 950], [4.5, 0.03, 3200], [5.5, 0.01, 8200]] },
   { id: 'mainline', name: '본류 균형', go: '2.5', diameterMm: 0.26, purpose: '중형 잉어·향어',
     desc: '중형어의 돌진을 버티는 균형 원줄. 극세 원줄보다 굵어 예민한 입질은 줄어든다',
-    stages: [[4.4, 0.24, 260], [5.5, 0.19, 1350], [6.8, 0.14, 4200], [8.1, 0.10, 10500]] },
+    stages: [[4.8, 0.20, 260], [5.5, 0.19, 1350], [6.8, 0.14, 4200], [8.1, 0.10, 10500]] },
   { id: 'armorline', name: '강벽 대물', go: '5', diameterMm: 0.37, purpose: '대물 · 강도 우선',
     desc: '중간 하중의 대물용 모노 원줄. 초대물의 최대 돌진에는 초대물 카본·합사 계열이 필요하며 굵기에 따른 경계심과 채비 둔화가 남는다',
     stages: [[8.0, 0.50, 520], [10.1, 0.44, 2150], [12.4, 0.38, 5900], [14.8, 0.32, 12500]] },
@@ -127,6 +127,8 @@ const HOOK_SERIES: HookSeries[] = [
 ];
 export const EXPANDED_HOOKS: HookSpec[] = HOOK_SERIES.flatMap(series => series.stages.map(([hold, attraction, price], i) => ({
   id: `willow-${series.id}-${i + 1}`, name: `버들못 ${series.name} ${STAGES[i]} ${series.go}호`, gapMm: series.gapMm,
+  // 호수가 아닌 입문/개량/정밀/명장 가공 단계에 따른 실제 챔질 배율.
+  sharpness: [1, 1.06, 1.12, 1.20][i],
   hold, attraction, price, ...meta(i, series.purpose), desc: series.desc,
 })));
 

@@ -58,17 +58,17 @@ export const LINES: LineSpec[] = [
   { id: '1.5', name: '선라인 헤라 원줄 노즈리 1.5호', strength: 2.7, material: 'nylon', visibility: 0, price: 0, level: 1, rarity: 'common', desc: '가늘어 예민한 붕어도 잘 문다' },
   { id: '2', name: '선라인 헤라 원줄 노즈리 2호', strength: 3.6, material: 'nylon', visibility: 0.12, price: 0, level: 1, rarity: 'common', desc: '붕어 찌낚시 기본 원줄' },
   { id: '3', name: '선라인 헤라 원줄 노즈리 3호', strength: 5.4, material: 'nylon', visibility: 0.3, price: 120, level: 2, rarity: 'common', desc: '잉어가 섞이는 자리용' },
-  { id: '4', name: '선라인 토네이도 V하드 4호', strength: 7.2, material: 'fluorocarbon', visibility: 0.45, price: 240, level: 4, rarity: 'rare', desc: '대물 잉어·가물치를 버틴다' },
-  { id: 'c2', name: '선라인 토네이도 V하드 2호', strength: 4.1, material: 'fluorocarbon', visibility: 0.04, price: 600, level: 5, rarity: 'rare', desc: '물속에서 잘 안 보이고 빨리 가라앉는다' },
-  { id: 'c3', name: '선라인 토네이도 V하드 3호', strength: 6.3, material: 'fluorocarbon', visibility: 0.14, price: 1100, level: 7, rarity: 'rare', desc: '굵기 대비 질기고 눈에 덜 띈다' },
+  { id: '4', name: '선라인 토네이도 V하드 4호', strength: 8.6, material: 'fluorocarbon', visibility: 0.24, price: 1250, level: 4, rarity: 'rare', desc: '대물 잉어·가물치를 버틴다' },
+  { id: 'c2', name: '선라인 토네이도 V하드 2호', strength: 4.1, material: 'fluorocarbon', visibility: 0.04, price: 600, level: 4, rarity: 'rare', desc: '물속에서 잘 안 보이고 빨리 가라앉는다' },
+  { id: 'c3', name: '선라인 토네이도 V하드 3호', strength: 6.3, material: 'fluorocarbon', visibility: 0.14, price: 1100, level: 4, rarity: 'rare', desc: '굵기 대비 질기고 눈에 덜 띈다' },
 ];
 
 LINES.push(
   { id: 'n1', name: '선라인 헤라 원줄 노즈리 1호', strength: 1.9, material: 'nylon', visibility: 0, price: 80, level: 1, rarity: 'common', desc: '얕은 물의 예민한 붕어용. 큰 잉어에는 조심' },
-  { id: 'n25', name: '선라인 헤라 원줄 노즈리 2.5호', strength: 4.5, material: 'nylon', visibility: 0.2, price: 200, level: 2, rarity: 'common', desc: '붕어와 중형 잉어 사이의 균형' },
+  { id: 'n25', name: '선라인 헤라 원줄 노즈리 2.5호', strength: 4.5, material: 'nylon', visibility: 0.2, price: 100, level: 2, rarity: 'common', desc: '붕어와 중형 잉어 사이의 균형' },
   { id: 'herabito', name: '선라인 헤라비토 원줄', strength: 4.2, material: 'nylon', visibility: 0.09, price: 480, level: 3, rarity: 'rare', desc: '민물 헤라 원줄. 게임에서는 예민한 붕어와 중형어에 맞춤' },
-  { id: 'fc15', name: '선라인 토네이도 V하드 1.5호', strength: 3.1, material: 'fluorocarbon', visibility: 0.01, price: 440, level: 3, rarity: 'rare', desc: '플루오로카본 목줄을 게임의 공용줄로 사용' },
-  { id: 'fc4', name: '선라인 토네이도 V하드 4호 대물 채비', strength: 8.6, material: 'fluorocarbon', visibility: 0.24, price: 1600, level: 8, rarity: 'rare', desc: '같은 실제 모델의 게임 대물 세팅. 하중은 게임 수치' },
+  { id: 'fc15', name: '선라인 토네이도 V하드 1.5호', strength: 3.1, material: 'fluorocarbon', visibility: 0.01, price: 440, level: 4, rarity: 'rare', desc: '플루오로카본 목줄을 게임의 공용줄로 사용' },
+  { id: 'fc4', name: '선라인 토네이도 V하드 4호 대물 채비', strength: 8.6, material: 'fluorocarbon', visibility: 0.24, price: 1250, level: 4, rarity: 'rare', desc: '같은 실제 모델의 게임 대물 세팅. 하중은 게임 수치' },
 );
 
 /** 민장대 (릴 없는 붕어 찌낚싯대). 게임에서 1칸 = 1.8m */
@@ -140,7 +140,7 @@ export const HOOKS: HookSpec[] = [
   { id: 'small', name: '오너 OH 갈색 헤라 개량스레 5호', hold: 0.9, attraction: 1.1, price: 0, level: 1, rarity: 'uncommon', desc: '붕어와 작은 물고기에게 유리' },
   { id: 'medium', name: '가마카츠 이세니 7호', hold: 1.15, attraction: 1, price: 160, level: 1, rarity: 'uncommon', desc: '붕어와 잉어를 함께 노린다' },
   { id: 'large', name: '가마카츠 이세니 10호', hold: 1.5, attraction: 0.8, price: 280, level: 1, rarity: 'uncommon', desc: '큰 물고기를 단단히 걸지만 잔챙이 입질은 줄어든다' },
-  { id: 'sharp', name: '오너 OH 갈색 헤라 개량스레 4호', hold: 1.1, attraction: 1.25, price: 90, level: 1, rarity: 'uncommon', desc: '폭이 작아 작은 입의 붕어와 글루텐 떡밥에 맞는 무미늘 바늘' },
+  { id: 'sharp', name: '오너 OH 갈색 헤라 개량스레 4호', hold: 0.85, attraction: 1.25, price: 90, level: 1, rarity: 'uncommon', desc: '폭이 작아 작은 입의 붕어와 글루텐 떡밥에 맞는 무미늘 바늘' },
   { id: 'monster', name: '가마카츠 이세니 13호', hold: 1.9, attraction: 0.72, price: 400, level: 1, rarity: 'uncommon', desc: '큰 미끼를 다는 메기·가물치용. 작은 물고기는 삼키기 어렵다' },
 ];
 export const BAIT_PACKS = [
@@ -178,7 +178,7 @@ RODS.push(
 );
 Object.assign(ROD_ACTION, { 'willow-soft': 0.3, 'willow-finesse': 0.25, 'willow-guard': 0.88, 'willow-master': 0.18 });
 LINES.push(
-  { id: 'willow-entry', name: '버들못 실속 원줄 2.5호', diameterMm: 0.26, strength: 3.9, material: 'nylon', visibility: 0.22, price: 100, level: 1, rarity: 'common', desc: '저렴한 중간 굵기. 예민한 붕어보다 일반 낚시에 알맞다' },
+  { id: 'willow-entry', name: '버들못 실속 원줄 2.5호', diameterMm: 0.26, strength: 3.9, material: 'nylon', visibility: 0.22, price: 65, level: 1, rarity: 'common', desc: '저렴한 중간 굵기. 예민한 붕어보다 일반 낚시에 알맞다' },
   { id: 'willow-silk', name: '버들못 세사 원줄 0.8호', diameterMm: 0.145, strength: 1.8, material: 'nylon', visibility: 0, price: 300, level: 2, rarity: 'uncommon', desc: '매우 가늘어 섬세한 채비에 적합. 작은 하중에도 끊어지니 큰 고기는 피한다' },
   { id: 'willow-balance', name: '버들못 정밀 원줄 1.7호', diameterMm: 0.22, strength: 4.5, material: 'nylon', visibility: 0.08, price: 850, level: 5, rarity: 'rare', desc: '붕어와 중형 잉어 사이의 균형. 초대물용 강도는 없다' },
   { id: 'willow-heavy', name: '버들못 강공 원줄 6호', diameterMm: 0.405, strength: 10.5, material: 'nylon', visibility: 0.55, price: 2100, level: 8, rarity: 'epic', desc: '대물의 힘을 버티는 굵은 줄. 경계심 높은 고기의 입질과 채비 예민함은 줄어든다' },
@@ -186,10 +186,10 @@ LINES.push(
 );
 HOOKS.push(
   { id: 'willow-entry', name: '버들못 실속 붕어바늘 5호', gapMm: 4.5, hold: 0.96, attraction: 1.08, price: 65, level: 1, rarity: 'common', desc: '작은 지렁이와 떡밥을 쓰는 기본 붕어바늘' },
-  { id: 'willow-fine', name: '버들못 세축 바늘 3호', gapMm: 3.2, hold: 0.92, attraction: 1.3, price: 240, level: 2, rarity: 'uncommon', desc: '작은 입에도 잘 들어가지만 큰 미끼를 달기 어렵고 대물에는 쉽게 빠진다' },
-  { id: 'willow-balance', name: '버들못 정밀 바늘 7호', gapMm: 6, hold: 1.28, attraction: 1.06, price: 620, level: 4, rarity: 'rare', desc: '옥수수와 떡밥을 두루 쓰는 중형어용. 작은 붕어에는 다소 크다' },
-  { id: 'willow-forged', name: '버들못 강축 대물바늘 12호', gapMm: 11, hold: 1.85, attraction: 0.8, price: 1900, level: 7, rarity: 'epic', desc: '큰 잉어와 메기용. 큰 미끼는 잘 받지만 작은 물고기는 삼키기 어렵다' },
-  { id: 'willow-master', name: '버들못 명인 세축바늘 4호', gapMm: 3.8, hold: 1.2, attraction: 1.32, price: 3100, level: 10, rarity: 'legendary', desc: '약한 입질을 노리는 정밀 붕어용. 넓은 입의 대물에는 강축바늘이 유리하다' },
+  { id: 'willow-fine', name: '버들못 세축 바늘 3호', gapMm: 3.2, hold: 0.92, attraction: 1.3, price: 240, level: 2, rarity: 'uncommon', shape: 'fine', wireMm: 0.24, barbed: false, sharpness: 1.04, desc: '작은 입에도 잘 들어가지만 큰 미끼를 달기 어렵고 대물에는 쉽게 빠진다' },
+  { id: 'willow-balance', name: '버들못 정밀 바늘 7호', gapMm: 6, hold: 1.28, attraction: 1.06, price: 620, level: 4, rarity: 'rare', sharpness: 1.08, desc: '옥수수와 떡밥을 두루 쓰는 중형어용. 작은 붕어에는 다소 크다' },
+  { id: 'willow-forged', name: '버들못 강축 대물바늘 12호', gapMm: 11, hold: 3.8, attraction: 0.8, price: 1900, level: 7, rarity: 'epic', shape: 'round', wireMm: 0.75, barbed: true, sharpness: 1.14, desc: '큰 잉어와 메기용. 큰 미끼는 잘 받지만 작은 물고기는 삼키기 어렵다' },
+  { id: 'willow-master', name: '버들못 명인 세축바늘 4호', gapMm: 3.8, hold: 2.05, attraction: 1.32, price: 3100, level: 10, rarity: 'legendary', shape: 'fine', wireMm: 0.23, barbed: false, sharpness: 1.2, desc: '약한 입질을 노리는 정밀 붕어용. 넓은 입의 대물에는 강축바늘이 유리하다' },
 );
 FLOATS.push(
   { id: 'willow-wind', name: '버들못 바람 단찌', shape: 'short', notches: 6, sway: 0.35, sensitivity: 0.85, sinkSpeed: 0.65, scale: 1, price: 240, level: 2, rarity: 'uncommon', desc: '짧고 안정적인 수면 표시. 바람에 강하지만 작은 입질을 덜 보여 준다' },

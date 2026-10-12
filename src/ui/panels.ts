@@ -16,6 +16,7 @@ import { hookGap, hookLoad, hookSharpness, lineDiameter, lineGo, rodBreakLoad } 
 import { rankOf, rodAction, type FloatShape } from '../game/data';
 import { lineMaterial } from '../game/lineMaterials';
 import { getHookTraits } from '../game/hookTraits';
+import { hookValue, lineValue, type TackleValue } from './tackleValue';
 import './sizeRanks.css';
 import { itemQuality, QUALITY_LABELS } from '../game/itemQuality';
 import './shopQuality.css';
@@ -291,8 +292,8 @@ export function inventoryPanel(c: PanelCtx) {
   let content: string;
   if (tab !== 'craft') {
     const items = inventoryItems(c).filter(i => tab === 'all' || invTabOf(i.key) === tab);
-    const selectedKey = selected?.key.split(':');
     const selected = items.find(i => i.key === c.ui.invSelected) ?? items[0];
+    const selectedKey = selected?.key.split(':');
     const grid = items.map(i => slot(i.icon, i.count, `data-act="inv-select" data-id="${i.key}" title="${esc(i.name)}"`, `${selected?.key === i.key ? 'on' : ''} r-${i.rarity ?? 'common'}`)).join('');
     const detail = selected ? `<aside class="item-detail"><div class="slot-art big">${selected.icon}</div>
       <div class="item-name">${rarityName(selected.rarity, selected.name)} ${qualityBadge(selectedKey![0], selectedKey![1])}</div><p>${esc(selected.desc)}</p>
@@ -303,6 +304,19 @@ export function inventoryPanel(c: PanelCtx) {
     content = `<h3>떡밥 재료</h3><div class="slot-row">${INGREDIENTS.map(i => `<div class="equip-slot">${slot(itemIcon(i.id), d.ingredients[i.id], `title="${i.name}"`)}<small>${i.name}</small></div>`).join('')}</div>
       <h3>배합대 <small>재료를 섞어 바늘 떡밥과 집어 떡밥을 만듭니다</small></h3>
       <div class="recipes">${FEED_RECIPES.map(r => {
+        const materials = Object.entries(r.materials) as [IngredientId, number][];
+        const available = materials.every(([id, n]) => d.ingredients[id] >= n);
+        return `<div class="recipe ${available ? '' : 'off'}"><div class="recipe-in">${materials.map(([id, n]) => slot(itemIcon(id), n, `title="${INGREDIENTS.find(i => i.id === id)!.name}"`)).join('<i>+</i>')}</div><i class="arrow">→</i>${slot(itemIcon(r.bait), r.yield, `title="${r.name}"`)}
+          <button class="btn small ${available ? 'primary' : ''}" data-act="craft" data-id="${r.id}" ${available ? '' : 'disabled'}>${r.name}</button></div>`;
+      }).join('')}</div>`;
+  }
+  return `<div class="panel wide inventory-panel"><p class="kicker">${won(d.coins)} · Lv.${p.level}</p><h2>가방</h2>
+    ${tabs('inventory-tab', tab, [['all', '전체'], ['rod', '낚싯대'], ['tackle', '원줄·찌·바늘'], ['bait', '미끼·떡밥'], ['gear', '뜰채·살림망'], ['craft', '배합대']])}${content}${close('I')}</div>`;
+}
+
+
+// ── 상점 ──
+
 /** 상점·가방·채비에 같은 계산값을 표시한다. */
 const rodSpecText = (r: (typeof RODS)[number]) => {
   const action = rodAction(r.id);
@@ -320,18 +334,6 @@ const hookSpecText = (h: (typeof HOOKS)[number]) => {
 };
 const FLOAT_SHAPE_LABELS: Record<FloatShape, string> = { stick: '막대형', short: '단찌형', slim: '유선형', egg: '알형', long: '장찌형', reed: '갈대형', peacock: '공작형', electro: '전자찌형' };
 const floatSpecText = (f: (typeof FLOATS)[number]) => `${FLOAT_SHAPE_LABELS[f.shape ?? 'stick']} · ${floatTraits(f)}<br>정착 속도 ${f.sinkSpeed.toFixed(2)}m/s · 물결 흔들림 ×${(f.sway ?? 1).toFixed(2)}${f.light || f.glow ? '' : ' · 야간 발광 없음'}`;
-        const materials = Object.entries(r.materials) as [IngredientId, number][];
-        const available = materials.every(([id, n]) => d.ingredients[id] >= n);
-        return `<div class="recipe ${available ? '' : 'off'}"><div class="recipe-in">${materials.map(([id, n]) => slot(itemIcon(id), n, `title="${INGREDIENTS.find(i => i.id === id)!.name}"`)).join('<i>+</i>')}</div><i class="arrow">→</i>${slot(itemIcon(r.bait), r.yield, `title="${r.name}"`)}
-          <button class="btn small ${available ? 'primary' : ''}" data-act="craft" data-id="${r.id}" ${available ? '' : 'disabled'}>${r.name}</button></div>`;
-      }).join('')}</div>`;
-  }
-  return `<div class="panel wide inventory-panel"><p class="kicker">${won(d.coins)} · Lv.${p.level}</p><h2>가방</h2>
-    ${tabs('inventory-tab', tab, [['all', '전체'], ['rod', '낚싯대'], ['tackle', '원줄·찌·바늘'], ['bait', '미끼·떡밥'], ['gear', '뜰채·살림망'], ['craft', '배합대']])}${content}${close('I')}</div>`;
-}
-
-
-// ── 상점 ──
 
 export function shopPanel(c: PanelCtx) {
   const p = c.player, d = p.data;
@@ -346,7 +348,6 @@ export function shopPanel(c: PanelCtx) {
     return `<button class="btn small shop-goal-button ${selected ? 'on' : ''}" data-act="${selected ? 'clear-shop-goal' : 'shop-goal'}" data-kind="${kind}" data-id="${item.id}">${selected ? '목표 해제' : '구매목표'}</button>`;
   };
   const unitPrice = (price: number, count: number) => `${(price / count).toLocaleString('ko-KR', { maximumFractionDigits: 1 })}원`;
-  };
   const ordered = <T extends ShopItem>(kind: ShopKind, list: readonly T[]) => list.slice().sort((a, b) => itemQuality(kind, a.id).tier - itemQuality(kind, b.id).tier || a.price - b.price);
   const card = (kind: ShopKind, item: ShopItem, icon: string, info: string) => {
     if (!matches(kind, item)) return '';
@@ -357,22 +358,45 @@ export function shopPanel(c: PanelCtx) {
     const label = owned ? '보유 중' : locked ? `Lv.${item.level} 필요` : d.coins < item.price ? '금액 부족' : '구매';
     return `<div class="shop-card ${locked ? 'locked' : ''}"><span class="shop-art">${slot(icon, '', '', `r-${item.rarity ?? 'common'}`)}${locked ? `<i class="lock">${itemIcon('lock')}</i>` : ''}</span><div>${rarityName(item.rarity, item.name)} ${qualityBadge(kind, item.id)}<small class="quality-purpose">${esc(q.purpose)}</small><small>${esc(item.desc ?? '')}${info ? `<br><span class="shop-spec">${info}</span>` : ''}${productNote(kind, item.id)}</small><span class="shop-price">${won(item.price)}</span></div>
       <div class="shop-actions">${goalButton(kind, item)}<button class="btn small ${owned || locked ? '' : 'primary'}" data-act="buy" data-kind="${kind}" data-id="${item.id}" ${owned || locked || d.coins < item.price ? 'disabled' : ''}>${label}</button></div></div>`;
-  // 같은 제품(브랜드·모델)의 호수별 규격표: 이름에서 호수를 떼어 묶는다
-  const specGroups = <T extends { id: string; name: string; price: number; level?: number; rarity?: Rarity; desc?: string }>(kind: ShopKind, list: T[], size: (t: T) => number, cols: (t: T) => string[], head: string[]) => {
+  };
+  // 공통 특성은 제품 머리글에, 호수별 차이는 같은 열에 모아 비교한다.
+  const specGroups = <T extends ShopItem>(kind: ShopKind, list: T[], size: (t: T) => number, cols: (t: T) => string[], head: string[], sharedColumns: number[], value: (t: T) => TackleValue) => {
     const groups = new Map<string, T[]>();
     for (const t of list) {
-      if (!matches(kind, t)) continue;
-      visibleCount++;
       const model = t.name.replace(/\s*[\d.]+호/, '').trim();
-      groups.set(model, [...(groups.get(model) ?? []), t]);
+      const items = groups.get(model) ?? [];
+      // 구 저장용 별칭 ID가 남아 있는 동일 규격은 한 번만 표시한다.
+      const duplicate = items.findIndex(x => x.name === t.name && x.price === t.price && cols(x).join('|') === cols(t).join('|'));
+      if (duplicate < 0) items.push(t);
+      else if (p.owns(kind, t.id)) items[duplicate] = t;
+      groups.set(model, items);
     }
-    return [...groups].sort(([, a], [, b]) => Math.min(...a.map(t => itemQuality(kind, t.id).tier)) - Math.min(...b.map(t => itemQuality(kind, t.id).tier)) || Math.min(...a.map(t => t.price)) - Math.min(...b.map(t => t.price))).map(([model, items]) => `<section class="spec-group"><h3>${esc(model)}</h3><p class="spec-purpose">${esc(itemQuality(kind, items[0].id).purpose)}</p>
-      <div class="spec-table" style="--spec-columns:${head.length - 1};--spec-width:${Math.max(600, head.length * 108 + 174)}px"><div class="spec-row head">${head.map(h => `<span>${h}</span>`).join('')}<span>품질 · 가격</span><span></span></div>
-      ${items.sort((x, y) => size(x) - size(y)).map(t => {
+    return [...groups].map(([model, items]): [string, T[]] => [model, items.filter(t => matches(kind, t))])
+      .filter(([, items]) => items.length > 0)
+      .sort(([, a], [, b]) => Math.min(...a.map(t => itemQuality(kind, t.id).tier)) - Math.min(...b.map(t => itemQuality(kind, t.id).tier)) || Math.min(...a.map(t => t.price)) - Math.min(...b.map(t => t.price))).map(([model, items]) => {
+      items.sort((x, y) => size(x) - size(y));
+      visibleCount += items.length;
+      const first = items[0], firstCols = cols(first), q = itemQuality(kind, first.id);
+      const sameQuality = items.every(t => itemQuality(kind, t.id).tier === q.tier);
+      const shared = sharedColumns.filter(i => items.every(t => cols(t)[i] === firstCols[i]));
+      const varying = head.map((_, i) => i).filter(i => i > 0 && !shared.includes(i));
+      const reason = value(first);
+      const comparison = items.length === 1 && reason.reference && reason.changes.length
+        ? `<div class="tackle-comparison"><small>${esc(reason.reference)} 대비</small><strong>${reason.changes.map(esc).join(' · ')}</strong></div>` : '';
+      return `<section class="tackle-group" style="--tackle-columns:${varying.length}">
+      <header class="tackle-heading"><div><h3>${esc(model)}</h3><p>${esc(q.purpose)}</p></div>${sameQuality ? qualityBadge(kind, first.id) : ''}</header>
+      <div class="tackle-traits">${shared.map(i => `<span><small>${head[i]}</small> ${firstCols[i]}</span>`).join('')}</div>
+      ${comparison}
+      <div class="tackle-row tackle-head" aria-hidden="true"><span>호수</span><div class="tackle-stats">${varying.map(i => `<span>${head[i]}</span>`).join('')}</div><span class="tackle-price">가격</span><span></span></div>
+      <div class="tackle-options">${items.map(t => {
         const owned = p.owns(kind, t.id), locked = (t.level ?? 1) > p.level;
-        return `<div class="spec-row ${owned ? 'owned' : ''} ${locked ? 'locked' : ''}">${cols(t).map(v => `<span>${v}</span>`).join('')}<span class="spec-quality-price" title="${esc(itemQuality(kind, t.id).purpose)}">${qualityBadge(kind, t.id)}<strong>${won(t.price)}</strong></span>
-          <div class="shop-actions">${goalButton(kind, t)}<button class="btn small ${owned || locked ? '' : 'primary'}" data-act="buy" data-kind="${kind}" data-id="${t.id}" ${owned || locked || d.coins < t.price ? 'disabled' : ''}>${owned ? '보유 중' : locked ? `Lv.${t.level} 필요` : d.coins < t.price ? '금액 부족' : '구매'}</button></div></div>`;
-      }).join('')}</div></section>`).join('');
+        const values = cols(t);
+        return `<div class="tackle-row ${owned ? 'owned' : ''}"><div class="tackle-size">${values[0]}${owned ? '<small>보유 중</small>' : ''}</div>
+          <div class="tackle-stats">${varying.map(i => `<span><small>${head[i]}</small><strong>${values[i]}</strong></span>`).join('')}</div>
+          <div class="tackle-price">${sameQuality ? '' : qualityBadge(kind, t.id)}<strong>${t.price === 0 ? '기본 지급' : won(t.price)}</strong></div>
+          <div class="tackle-actions"><button class="btn small ${owned || locked ? '' : 'primary'}" data-act="buy" data-kind="${kind}" data-id="${t.id}" aria-label="${esc(t.name)} 구매" ${owned || locked || d.coins < t.price ? 'disabled' : ''}>${owned ? '보유 중' : locked ? `Lv.${t.level} 필요` : d.coins < t.price ? '금액 부족' : '구매'}</button>${goalButton(kind, t)}</div></div>`;
+      }).join('')}</div><p class="tackle-tradeoff">${esc(reason.tradeoff)}</p></section>`;
+    }).join('');
   };
   let body = '';
   switch (c.ui.shopTab) {
@@ -388,12 +412,12 @@ export function shopPanel(c: PanelCtx) {
     case 'line': body = specGroups('line', LINES, l => +lineGo(l), l => {
       const material = lineMaterial(l);
       return [`<b>${lineGo(l)}호</b>`, `<span title="${esc(material.description)}">${material.name}</span>`, `${lineDiameter(l).toFixed(3)}mm`, `${l.strength.toFixed(1)}kgf`, `${(material.stretchRatio * 100).toFixed(1)}%`, `${Math.round(l.visibility * material.visibilityScale * 100)}%`];
-    }, ['호수', '재질', '굵기', '강도', '늘어남', '시인성']); break;
+    }, ['호수', '재질', '굵기', '강도', '늘어남', '눈에 띔 ↓'], [1, 4], lineValue); break;
     case 'float': body = ordered('float', FLOATS).map(f => card('float', f, itemIcon('float', f.id), floatSpecText(f))).join(''); break;
     case 'hook': body = specGroups('hook', HOOKS, h => +(h.name.match(/(\d+)호/)?.[1] ?? 0), h => {
       const traits = getHookTraits(h);
       return [`<b>${hookNumberText(h)}</b>`, traits.shapeLabel, `${traits.wireMm.toFixed(2)}mm`, traits.barbed ? '있음' : '무미늘', `${hookGap(h).toFixed(1)}mm`, `${hookLoad(h).toFixed(1)}kgf`, `×${hookSharpness(h).toFixed(2)}`];
-    }, ['호수', '형태', '바늘 축', '미늘', '바늘 폭', '하중', '날카로움']); break;
+    }, ['호수', '형태', '바늘 축', '미늘', '바늘 폭', '하중', '날카로움'], [1, 2, 3, 6], hookValue); break;
     case 'net': body = '<h3 class="shop-section">뜰채</h3>' + ordered('net', NETS).map(n => card('net', n, itemIcon('net'), `${n.maxKg}kg까지`)).join('') + '<h3 class="shop-section">살림망</h3>' + ordered('keepnet', KEEPNETS).map(k => card('keepnet', k, itemIcon('keepnet'), `${k.capacity}마리 보관`)).join(''); break;
     case 'repair': {
       const worn = [...RODS.filter(r => d.rods[r.id]).map(r => [`rod:${r.id}`, r.name, itemIcon('rod', r.id)]), ...LINES.filter(l => d.lines.includes(l.id)).map(l => [`line:${l.id}`, l.name, itemIcon('line')])]
