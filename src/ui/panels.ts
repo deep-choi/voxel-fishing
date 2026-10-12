@@ -2,7 +2,7 @@ import { BAITS, BAIT_PACKS, FEED_RECIPES, FLOATS, HOOKS, INGREDIENTS, LINES, MAX
 import { ACHIEVEMENTS, dailyQuests, marketMul } from '../game/economy';
 import { WEATHER, type Environment } from '../game/environment';
 import type { Fishing } from '../game/fishing';
-import { ACTIVE_FISHERY, FISHERIES, canEnterFishery, findFishery } from '../game/fisheries';
+import { ACTIVE_FISHERY, FISHERIES, FISHERY_CAPACITY, canEnterFishery, findFishery } from '../game/fisheries';
 import { preferredBaits, affinityLabel } from '../game/ecology';
 import { KEEPNETS, NETS, RARITY, SPECIES_RULES } from '../game/items';
 import type { PlayerProgress, ShopKind } from '../game/profile';
@@ -33,7 +33,7 @@ export interface UiState {
   recordSpecies: SpeciesId; weekly: boolean;
   questTab: 'daily' | 'achieve';
   resetArmed: boolean;
-  onlineTab: OnlineTab; onlineSpecies: SpeciesId; onlineScope: 'all' | FisheryId; nicknameDraft: string; chatDraft: string;
+  onlineSpecies: SpeciesId; onlineScope: 'all' | FisheryId; nicknameDraft: string; chatDraft: string;
 }
 export interface PanelCtx {
   player: PlayerProgress; game: Fishing; env: Environment; tournament: Tournament | null;
@@ -57,12 +57,14 @@ const productNote = (kind: string, id: string) => {
 const tabs = (act: string, current: string, list: [string, string][]) =>
   `<div class="record-tabs">${list.map(([id, name]) => `<button class="btn small ${id === current ? 'on' : ''}" data-act="${act}" data-id="${id}">${name}</button>`).join('')}</div>`;
 
-export function fisheryCards() {
+export const fisheryOccupancy = (state: OnlineState | undefined, id: FisheryId) => `${state?.fisheryCounts[id] ?? '—'} / ${FISHERY_CAPACITY}명`;
+export function fisheryCards(online?: OnlineState) {
   return `<div class="fishery-grid">${FISHERIES.map(f => `<button class="fishery-card ${f.id === ACTIVE_FISHERY.id ? 'selected' : ''}" data-act="fishery" data-id="${f.id}" ${canEnterFishery(f.id) ? '' : 'disabled'} style="--map-water:${f.palette.shallow};--map-leaf:${f.palette.leaf};--map-sand:${f.palette.sand};--map-accent:${f.palette.accent}">
     <span class="fishery-preview ${f.id}"><i class="preview-hill"></i><i class="preview-shore"></i><i class="preview-deck"></i><i class="preview-roof"></i></span>
     <span class="fishery-heading"><b>${f.name}</b><em>${!canEnterFishery(f.id) ? '준비 중' : f.id === ACTIVE_FISHERY.id ? '현재 낚시터' : f.difficulty}</em></span>
     <small>${f.theme}</small><span class="fishery-desc">${f.desc}</span><span class="fishery-targets">${f.targets.map(id => SPECIES[id].name).join(' · ')}</span>
     <small>미끼 ${f.recommendedBaits.map(id => BAITS[id].name).join(' · ')}<br>좌대 수심 ${f.platforms.depths[0]}~${f.platforms.depths[3]}m · 8좌대 · 좌대당 3대</small>
+    <span class="fishery-occupancy" data-fishery-count="${f.id}">${fisheryOccupancy(online, f.id)}</span>
   </button>`).join('')}</div>`;
 }
 export function encounterForecast(g: Fishing) {
@@ -74,31 +76,31 @@ export function encounterForecast(g: Fishing) {
   </div>`;
 }
 
-export function onlinePanel(c: PanelCtx) {
+function onlinePanel(c: PanelCtx, tab: Exclude<OnlineTab, 'chat'>) {
   const s = c.online, ui = c.ui;
   const login = `<button class="btn primary" data-act="online-login" ${s.busy || !s.ready ? 'disabled' : ''}>${s.busy ? '로그인 중…' : 'Google 로그인'}</button>`;
   let body = '';
-  if (ui.onlineTab === 'account') {
+  if (tab === 'account') {
     body = !s.ready ? '<p class="empty">계정을 연결하고 있어요…</p>' : s.uid ? `<p class="online-name">${s.nickname ? esc(s.nickname) : '닉네임을 정해 주세요'}</p>
       <label class="online-field">닉네임<input id="nickname-input" data-act="nickname-draft" aria-label="닉네임" value="${esc(ui.nicknameDraft || s.nickname)}" maxlength="12" autocomplete="off" placeholder="한글·영문·숫자·밑줄 2~12자"></label>
       <div class="row"><button class="btn primary" data-act="online-nickname" ${s.busy ? 'disabled' : ''}>${s.busy ? '저장 중…' : '닉네임 저장'}</button><button class="btn" data-act="online-logout" ${s.busy ? 'disabled' : ''}>로그아웃</button></div>`
       : `<p class="empty">구글 계정으로 로그인하고 나만의 닉네임을 정하세요.</p>${login}`;
   }
-  if (ui.onlineTab === 'chat') {
-    body = !s.uid ? `<p class="empty">로그인하면 ${ACTIVE_FISHERY.name}의 다른 조사와 대화할 수 있어요.</p>${login}`
-      : !s.nickname ? '<p class="empty">계정 탭에서 닉네임을 먼저 정해 주세요.</p>'
-      : `<p class="kicker">${ACTIVE_FISHERY.name} 채팅</p><div class="chat-messages" role="log" aria-live="polite">${s.loadingChat ? '<p class="empty">대화를 불러오는 중…</p>' : s.messages.length ? s.messages.map(m => `<div class="chat-message ${m.uid === s.uid ? 'mine' : ''}"><b>${esc(m.nickname)}</b><time>${m.at ? new Date(m.at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) : '전송 중'}</time><p>${esc(m.text)}</p></div>`).join('') : '<p class="empty">첫 인사를 남겨 보세요.</p>'}</div>
-      <div class="chat-compose"><input id="chat-input" data-act="chat-draft" aria-label="채팅 메시지" value="${esc(ui.chatDraft)}" maxlength="200" placeholder="메시지 입력 · Enter로 전송" autocomplete="off"><button class="btn primary" data-act="online-send" ${s.busy ? 'disabled' : ''}>전송</button></div>`;
-  }
-  if (ui.onlineTab === 'ranking') {
+  if (tab === 'ranking') {
     body = `${tabs('online-scope', ui.onlineScope, [['all', '전체 낚시터'], [ACTIVE_FISHERY.id, ACTIVE_FISHERY.name]])}
       ${tabs('online-species', ui.onlineSpecies, SPECIES_LIST.map(sp => [sp.id, sp.name]))}
       <p class="depth-note">${SPECIES[ui.onlineSpecies].name} 최대 길이 · 상위 20명 · 로그인 후 잡은 고기가 반영됩니다.</p>
       ${s.loadingRanking ? '<p class="empty">랭킹을 불러오는 중…</p>' : s.rankings.length ? `<ol class="online-ranking">${s.rankings.map((r, i) => `<li class="${r.uid === s.uid ? 'me' : ''}"><span>${i + 1}</span><b>${esc(r.nickname)}</b><strong>${r.cm.toFixed(1)}cm</strong><small>${kgText(r.kg)} · ${(findFishery(r.fisheryId) ?? FISHERIES[0]).name}</small></li>`).join('')}</ol>` : '<p class="empty">아직 등록된 기록이 없어요.</p>'}`;
   }
-  return `<div class="panel wide online-panel"><p class="kicker">${s.nickname ? esc(s.nickname) : '싱글 게임 · 온라인 커뮤니티'}</p><h2>온라인</h2>
-    ${tabs('online-tab', ui.onlineTab, [['account', '계정·닉네임'], ['chat', '낚시터 채팅'], ['ranking', '최대어 랭킹']])}
-    ${s.error ? `<p class="warn" role="alert">${esc(s.error)}</p>` : ''}${body}${close('L')}</div>`;
+  return `<div class="panel ${tab === 'ranking' ? 'wide' : ''} online-panel"><h2>${tab === 'account' ? '계정' : '온라인 최대어 랭킹'}</h2>
+    ${s.error ? `<p class="warn" role="alert">${esc(s.error)}</p>` : ''}${body}${close(tab === 'ranking' ? 'L' : 'Esc')}</div>`;
+}
+export const accountPanel = (c: PanelCtx) => onlinePanel(c, 'account');
+export const onlineRankingPanel = (c: PanelCtx) => onlinePanel(c, 'ranking');
+export function dockMessages(state: OnlineState) {
+  return state.loadingChat ? '<p class="chat-hint">채팅을 불러오는 중…</p>' : state.messages.length
+    ? state.messages.map(m => `<div class="dock-message ${m.uid === state.uid ? 'mine' : ''}"><b>${esc(m.nickname)}</b><span>${esc(m.text)}</span></div>`).join('')
+    : '<p class="chat-hint">Enter로 첫 인사를 남겨 보세요</p>';
 }
 
 // ── 채비 조립 (러시안피싱4의 채비 화면처럼 대→원줄→찌→바늘→미끼 순서) ──
@@ -340,7 +342,7 @@ export function recordsPanel(c: PanelCtx) {
 // ── 좌대 이동 ──
 
 export function platformsPanel(c: PanelCtx) {
-  return `<div class="panel wide platform-panel"><p class="kicker">${ACTIVE_FISHERY.name}</p><h2>낚시터 선택</h2>${fisheryCards()}<h3>현재 낚시터의 좌대</h3>
+  return `<div class="panel wide platform-panel"><p class="kicker">${ACTIVE_FISHERY.name}</p><h2>낚시터 선택</h2>${fisheryCards(c.online)}<h3>현재 낚시터의 좌대</h3>
     <div class="platform-list"><button class="platform-choice ${c.currentPlatform === null ? 'current' : ''}" data-act="travel" data-id="0">
       <span class="platform-number">관</span><b>관리동</b><small>낚시점 · 어시장</small><span class="platform-arrow">이동 →</span></button>${c.platforms.map(pl => `<button class="platform-choice ${c.currentPlatform === pl.id ? 'current' : ''}" data-act="travel" data-id="${pl.id}">
       <span class="platform-number">${String(pl.id).padStart(2, '0')}</span><b>${esc(pl.name)}</b><small>${['붕어 · 얕은 턱', '잉어 · 중간 수심', '향어 · 깊은 턱', '대물 · 깊은 수심'][Math.floor((pl.id - 1) / 2)]}<br>낚싯대 ${pl.rods} / ${MAX_DEPLOYED_RODS}${pl.bites ? ` · 입질 ${pl.bites}` : ''}</small><span class="platform-arrow">${c.currentPlatform === pl.id ? '현재 위치' : '이동 →'}</span>
@@ -456,7 +458,8 @@ export function pausePanel(c: PanelCtx) {
     ${tile('quests', '의뢰·업적', 'Q', 'scroll', '', p.claimable)}${tile('tournament', '대회', 'T', 'trophy', t ? `${t.rank}위 진행 중` : '')}
     ${tile('skills', '기술', 'K', 'skill', '', p.skillPoints)}${tile('platforms', '낚시터 선택', 'M', 'map', `${ACTIVE_FISHERY.name}${c.currentPlatform ? ` · ${c.currentPlatform}번` : ''}`)}
   </div></section>
-  <section><h3>기록·커뮤니티</h3><div class="hub-grid">${tile('collection', '도감', 'V', 'book')}${tile('records', '개인 기록', 'J', 'ruler')}${tile('online', '로그인·채팅·랭킹', 'L', 'trophy', c.online.nickname ? esc(c.online.nickname) : 'Google 로그인')}</div></section>
+  <section><h3>기록</h3><div class="hub-grid">${tile('collection', '도감', 'V', 'book')}${tile('records', '개인 기록', 'J', 'ruler')}${tile('onlineRanking', '온라인 랭킹', 'L', 'trophy')}</div></section>
+  <section><h3>커뮤니티</h3><div class="hub-grid">${tile('chat', '낚시터 채팅', 'Enter', 'scroll', fisheryOccupancy(c.online, ACTIVE_FISHERY.id))}${tile('account', '계정', '', 'book', c.online.nickname ? esc(c.online.nickname) : 'Google 로그인')}</div></section>
   <details class="hub-help"><summary>조작법</summary><ul class="help-touch">
     <li>왼쪽 아래 엄지로 걷기 · 오른쪽 화면을 끌어 둘러보기</li>
     <li>큰 버튼 <b>던지기</b>: 눌렀다 놓으면 앞치기 · 찌가 서면 <b>챔질</b>로 바뀌어요</li>

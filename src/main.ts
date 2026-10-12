@@ -207,7 +207,7 @@ const input = { primary: false, lift: false, hookset: false, retrieve: false };
 
 const canvas = renderer.domElement;
 const locked = () => document.pointerLockElement === canvas;
-const exploring = () => hud.started && hud.modal === 'none' && game.phase !== 'landed';
+const exploring = () => hud.started && !hud.chatting && hud.modal === 'none' && game.phase !== 'landed';
 const playing = () => exploring() && active !== null && !parking;
 function lock() {
   // 터치 조작에서는 마우스 잠금을 쓰지 않는다
@@ -237,6 +237,11 @@ const hud = new Hud(document.getElementById('hud')!, game, player, env, settings
     applyTouch();
     if (locked()) document.exitPointerLock();
   },
+  chatFocus() {
+    input.primary = input.lift = input.hookset = input.retrieve = false;
+    walk.w = walk.a = walk.s = walk.d = false;
+    if (locked()) document.exitPointerLock();
+  },
   resume() {
     if (hud.started) { sound.start(); lock(); }
   },
@@ -249,6 +254,7 @@ const hud = new Hud(document.getElementById('hud')!, game, player, env, settings
     void connectOnline().then(async service => {
       if (action === 'login') await service.login();
       if (action === 'logout') await service.logout();
+      if (action === 'enter') await service.enterFishery();
       if (action === 'nickname') await service.setNickname(value);
       if (action === 'send' && await service.sendChat(value)) hud.clearChatDraft();
       if (action === 'view') {
@@ -372,7 +378,7 @@ function finishTournament(t: Tournament) {
 
 document.addEventListener('pointerlockchange', () => {
   input.primary = input.lift = false;
-  if (!locked() && hud.started && hud.modal === 'none' && game.phase !== 'landed') hud.open('pause');
+  if (!locked() && hud.started && !hud.chatting && hud.modal === 'none' && game.phase !== 'landed') hud.open('pause');
 });
 document.addEventListener('mousemove', (e) => {
   if (!locked()) return;
@@ -382,6 +388,7 @@ document.addEventListener('mousemove', (e) => {
 });
 canvas.addEventListener('mousedown', (e) => {
   if (!hud.started) return;
+  if (hud.chatting) { hud.closeChat(); return; }
   if (hud.modal === 'none') sound.start();
   if (!locked() && hud.modal === 'none') lock();
   if (!playing()) return;
@@ -403,6 +410,7 @@ addEventListener('keydown', (e) => {
   if (e.target instanceof HTMLElement && (e.target.matches('input, textarea') || e.target.isContentEditable)) return;
   if (['Tab', 'Space', 'KeyM'].includes(e.code)) e.preventDefault();
   if (!hud.started) return;
+  if (e.code === 'Enter' && !e.repeat && !e.isComposing) { e.preventDefault(); hud.focusChat(); return; }
   if (game.phase === 'landed') {
     if (e.code === 'KeyE') finishCatch(true);
     if (e.code === 'KeyR') finishCatch(false);
@@ -418,7 +426,7 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyB' && !e.repeat) toggleModal('shop');
   if (e.code === 'KeyN' && !e.repeat) toggleModal('market');
   if (e.code === 'KeyJ' && !e.repeat) toggleModal('records');
-  if (e.code === 'KeyL' && !e.repeat) toggleModal('online');
+  if (e.code === 'KeyL' && !e.repeat) toggleModal('onlineRanking');
   if ((e.code === 'KeyG' || e.code === 'Digit4') && !e.repeat) feed();
   if (e.code === 'KeyQ' && !e.repeat) toggleModal('quests');
   if (e.code === 'KeyK' && !e.repeat) toggleModal('skills');

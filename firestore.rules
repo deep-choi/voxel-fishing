@@ -6,6 +6,14 @@ service cloud.firestore {
     function profile(uid) { return get(/databases/$(database)/documents/players/$(uid)).data; }
     function validName(name) { return name is string && name.matches('^[가-힣a-zA-Z0-9_]{2,12}$'); }
     function validMap(map) { return map in ['willow', 'lotus', 'moon', 'gold']; }
+    function openMap(map) { return map == 'willow'; }
+    // src/game/fisheries.ts의 FISHERY_CAPACITY=24, presence.ts의 LEASE_MS=150000과 함께 관리한다.
+    function validSlot(slot) { return slot.matches('^([0-9]|1[0-9]|2[0-3])$'); }
+    function membership(map, slot, session) {
+      let seat = get(/databases/$(database)/documents/presence/$(map)/slots/$(slot)).data;
+      return openMap(map) && validSlot(slot) && seat.uid == request.auth.uid && seat.sessionId == session
+        && seat.updatedAt > request.time - duration.value(150, 's');
+    }
     function validSpecies(id) { return id in ['crucian', 'carp', 'mirror', 'bluegill', 'catfish', 'yellowcat', 'snakehead', 'mandarin', 'bass']; }
     function maxLength(id) { return {'crucian':46, 'carp':110, 'mirror':90, 'bluegill':25, 'catfish':115, 'yellowcat':42, 'snakehead':110, 'mandarin':65, 'bass':65}[id]; }
     function validProfile(uid) {
@@ -36,11 +44,27 @@ service cloud.firestore {
       allow delete: if owner(resource.data.uid)
         && getAfter(/databases/$(database)/documents/players/$(request.auth.uid)).data.nicknameKey != key;
     }
+    match /presence/{map}/slots/{slot} {
+      allow get: if signedIn() && validMap(map) && validSlot(slot);
+      allow list: if signedIn() && validMap(map) && request.query.limit != null && request.query.limit <= 24;
+      function validSeat() {
+        let d = request.resource.data;
+        return signedIn() && openMap(map) && validSlot(slot)
+          && d.keys().hasAll(['uid','nickname','sessionId','updatedAt'])
+          && d.keys().hasOnly(['uid','nickname','sessionId','updatedAt'])
+          && d.uid == request.auth.uid && d.nickname == profile(request.auth.uid).nickname
+          && d.sessionId is string && d.sessionId.size() == 36 && d.updatedAt == request.time;
+      }
+      allow create: if validSeat();
+      allow update: if validSeat() && (owner(resource.data.uid) || resource.data.updatedAt <= request.time - duration.value(150, 's'));
+      allow delete: if owner(resource.data.uid);
+    }
     match /rooms/{map}/messages/{id} {
       allow get: if signedIn() && validMap(map);
       allow list: if signedIn() && validMap(map) && request.query.limit != null && request.query.limit <= 50;
       allow create: if signedIn() && validMap(map)
-        && request.resource.data.keys().hasOnly(['uid','nickname','text','createdAt'])
+        && request.resource.data.keys().hasOnly(['uid','nickname','text','createdAt','slotId','sessionId'])
+        && membership(map, request.resource.data.slotId, request.resource.data.sessionId)
         && request.resource.data.uid == request.auth.uid && request.resource.data.nickname == profile(request.auth.uid).nickname
         && request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 200
         && request.resource.data.createdAt == request.time

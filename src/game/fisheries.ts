@@ -2,6 +2,8 @@ import type { BaitId, SpeciesId } from './data';
 
 export type FisheryId = 'willow' | 'lotus' | 'moon' | 'gold';
 export const DEFAULT_FISHERY_ID: FisheryId = 'willow';
+/** firestore.rules의 입장 슬롯 범위(0~23)와 함께 변경한다. */
+export const FISHERY_CAPACITY = 24;
 /** 임시 개방 목록. 다른 맵의 지형·어종·저장 데이터는 그대로 보관한다. */
 const OPEN_FISHERIES: readonly FisheryId[] = [DEFAULT_FISHERY_ID];
 export const canEnterFishery = (id?: string | null) => OPEN_FISHERIES.some(open => open === id);

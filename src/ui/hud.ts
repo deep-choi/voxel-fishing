@@ -1,7 +1,7 @@
 import { MAX_DEPLOYED_RODS, type SpeciesId } from '../game/data';
 import { WEATHER, type Environment } from '../game/environment';
 import { ACTIVE_FISHERY } from '../game/fisheries';
-import { emptyOnlineState, type OnlineState, type OnlineTab } from '../game/onlineState';
+import { emptyOnlineState, type OnlineState } from '../game/onlineState';
 import type { FisheryId } from '../game/fisheries';
 import type { Catch, Fishing } from '../game/fishing';
 import { SPECIES_RULES } from '../game/items';
@@ -24,6 +24,7 @@ import './mobile.css';
 export interface HudHandlers {
   start(): void;
   sessionEnded(): void;
+  chatFocus(): void;
   /** 패널을 닫고 게임으로 돌아갈 때 */
   resume(): void;
   keep(keep: boolean): void;
@@ -58,12 +59,14 @@ export interface HudHandlers {
 /** 살림망 게이지 가운데 물고기 모양 */
 const FISH_GLYPH = '<svg viewBox="0 0 24 14" aria-hidden="true"><path d="M2 7c4-6 12-6 16 0-4 6-12 6-16 0z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M18 7l5-4v8z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="6.5" cy="6" r="1.1" fill="currentColor"/></svg>';
 
-export type Modal = 'none' | 'online' | 'setup' | 'keepnet' | 'pause' | 'platforms' | 'shop' | 'market' | 'collection' | 'records' | 'inventory' | 'quests' | 'skills' | 'tournament' | 'settings';
+export type Modal = 'none' | 'account' | 'onlineRanking' | 'setup' | 'keepnet' | 'pause' | 'platforms' | 'shop' | 'market' | 'collection' | 'records' | 'inventory' | 'quests' | 'skills' | 'tournament' | 'settings';
 export type MenuModal = Exclude<Modal, 'none' | 'pause'>;
 
 export class Hud {
   modal: Modal = 'none';
   started = false;
+  chatting = false;
+  private chatFolded = false;
   private readonly el: Record<string, HTMLElement> = {};
   private last: Record<string, string> = {};
   private platforms: P.PlatformStatus[] = [];
@@ -73,10 +76,10 @@ export class Hud {
   private tournament: Tournament | null = null;
   private forecastAt = 0;
   private online = emptyOnlineState();
-  private readonly ui: P.UiState = { inventoryTab: 'bag', invSelected: null, shopTab: 'bait', rigStep: 'rod', recordSpecies: 'crucian', weekly: false, questTab: 'daily', resetArmed: false, onlineTab: 'account', onlineSpecies: 'crucian', onlineScope: 'all', nicknameDraft: '', chatDraft: '' };
+  private readonly ui: P.UiState = { inventoryTab: 'bag', invSelected: null, shopTab: 'bait', rigStep: 'rod', recordSpecies: 'crucian', weekly: false, questTab: 'daily', resetArmed: false, onlineSpecies: 'crucian', onlineScope: 'all', nicknameDraft: '', chatDraft: '' };
 
   constructor(
-    root: HTMLElement,
+    private readonly root: HTMLElement,
     private game: Fishing,
     private readonly player: PlayerProgress,
     private readonly env: Environment,
@@ -89,7 +92,7 @@ export class Hud {
   <div class="start-card">
     <p class="kicker">${ACTIVE_FISHERY.name} · 민물 찌낚시</p>
     <h1>좌대 낚시</h1>
-    <button class="btn small" data-act="menu" data-id="online" data-ref="onlineEntry">Google 로그인 · 닉네임</button>
+    <button class="btn small" data-act="menu" data-id="account" data-ref="onlineEntry">Google 로그인 · 닉네임</button>
     <p class="lead">Google 로그인 후 버들못에서 낚시를 시작하세요.</p>
     ${P.fisheryCards()}
     <ul class="keys keys-desk">
@@ -107,6 +110,7 @@ export class Hud {
       <li>아래 칸을 눌러 낚싯대 바꾸기 · 오른쪽 위 ☰ 메뉴</li>
     </ul>
     <button class="btn primary" data-act="start" data-ref="entry" disabled>계정 확인 중…</button>
+    <p class="admission-note" data-ref="admission" role="alert" hidden></p>
     <p class="tip">시간·날씨에 따라 어종별 입질이 달라져요</p>
   </div>
 </div>
@@ -132,14 +136,24 @@ export class Hud {
   <div class="mc-xp" data-ref="xp"><i></i><b></b></div>
   <div class="hotbar" data-ref="hotbar"></div>
 </div>
+<section class="lakeside-chat" data-ref="chat" aria-label="낚시터 채팅" hidden>
+  <header><button class="chat-title" data-act="chat-focus">${ACTIVE_FISHERY.name} <span data-fishery-count="${ACTIVE_FISHERY.id}">— / 24명</span></button><button class="chat-fold" data-act="chat-fold" data-ref="chatFold" aria-label="채팅 접기" aria-expanded="true">−</button></header>
+  <div class="dock-messages" data-ref="chatLog" role="log" aria-live="polite" aria-relevant="additions text"></div>
+  <p class="dock-error" data-ref="chatError" role="alert" hidden></p>
+  <div class="dock-compose" data-ref="chatCompose" hidden><input id="chat-input" data-act="chat-draft" maxlength="200" aria-label="채팅 메시지" placeholder="메시지 입력 · Enter 전송 · Esc 닫기" autocomplete="off"><button data-act="online-send" data-ref="chatSend">전송</button></div>
+  <button class="chat-open" data-act="chat-focus" data-ref="chatHint">Enter · 채팅 입력</button>
+</section>
 <div class="modal" data-ref="modal"></div>
 <div class="catch" data-ref="catch"></div>`;
     root.querySelectorAll<HTMLElement>('[data-ref]').forEach((e) => (this.el[e.dataset.ref!] = e));
     root.addEventListener('click', (ev) => this.onClick(ev));
     root.addEventListener('input', (ev) => this.onInput(ev));
+    root.addEventListener('focusin', ev => { if ((ev.target as HTMLElement).id === 'chat-input' && !this.chatting) this.focusChat(); });
     root.addEventListener('keydown', ev => {
-      if ((ev.target as HTMLElement).id === 'chat-input' && ev.key === 'Enter' && !ev.isComposing) {
-        ev.preventDefault(); ev.stopPropagation(); this.h.online('send', this.ui.chatDraft);
+      if ((ev.target as HTMLElement).id === 'chat-input' && !ev.isComposing && ['Enter', 'Escape'].includes(ev.key)) {
+        ev.preventDefault(); ev.stopPropagation();
+        if (ev.key === 'Escape' || !this.ui.chatDraft.trim()) this.closeChat();
+        else this.h.online('send', this.ui.chatDraft);
       }
     });
   }
@@ -154,7 +168,8 @@ export class Hud {
     switch (t.dataset.act) {
       case 'start':
         if (this.enterGame()) break;
-        if (this.online.uid) { this.ui.onlineTab = 'account'; this.open('online'); }
+        if (this.online.uid && this.online.nickname) this.h.online('enter');
+        else if (this.online.uid) this.open('account');
         else this.h.online('login');
         break;
       case 'look': { const url = new URL(location.href); url.searchParams.set('style', id); location.assign(url.href); break; }
@@ -166,7 +181,11 @@ export class Hud {
       case 'online-logout': this.h.online('logout'); break;
       case 'online-nickname': this.h.online('nickname', this.ui.nicknameDraft || this.online.nickname); break;
       case 'online-send': this.h.online('send', this.ui.chatDraft); break;
-      case 'online-tab': this.ui.onlineTab = id as OnlineTab; this.syncOnlineView(); rerender(); break;
+      case 'chat-focus': this.focusChat(); break;
+      case 'chat-fold':
+        this.chatFolded = !this.chatFolded;
+        if (this.chatFolded && this.chatting) this.closeChat();
+        this.updateChat(); break;
       case 'online-scope': this.ui.onlineScope = id as 'all' | FisheryId; this.syncOnlineView(); rerender(); break;
       case 'online-species': this.ui.onlineSpecies = id as SpeciesId; this.syncOnlineView(); rerender(); break;
       case 'map':
@@ -196,7 +215,7 @@ export class Hud {
       case 'quit': this.h.quit(); rerender(); break;
       case 'inventory-tab': this.ui.inventoryTab = id as 'bag' | 'craft'; rerender(); break;
       case 'inv-select': this.ui.invSelected = id; rerender(); break;
-      case 'menu': this.h.menu(id as MenuModal); break;
+      case 'menu': if (id === 'chat') this.focusChat(); else this.h.menu(id as MenuModal); break;
       case 'record-species': this.ui.recordSpecies = id as SpeciesId; rerender(); break;
       case 'record-period': this.ui.weekly = id === 'week'; rerender(); break;
       case 'keep': this.h.keep(id === '1'); break;
@@ -224,20 +243,20 @@ export class Hud {
   }
 
   open(m: Modal) {
-    if (!this.started && m !== 'online') return;
-    const onlineWasOpen = this.modal === 'online';
+    if (!this.started && m !== 'account') return;
+    this.chatting = false;
+    (this.el.chatCompose.querySelector('input') as HTMLInputElement).blur();
     this.modal = m;
     if (!this.started) this.el.start.hidden = true;
-    if (m === 'online' || onlineWasOpen) this.syncOnlineView();
+    this.syncOnlineView();
     this.ui.resetArmed = false;
     this.renderModal();
   }
 
   close() {
-    const onlineWasOpen = this.modal === 'online';
     this.modal = 'none';
     if (!this.started) this.el.start.hidden = false;
-    if (onlineWasOpen) this.syncOnlineView();
+    this.syncOnlineView();
     this.renderModal();
     this.h.resume();
   }
@@ -248,11 +267,11 @@ export class Hud {
   }
   setTournament(t: Tournament | null) { this.tournament = t; }
   private syncOnlineView() {
-    this.h.online('view', JSON.stringify({ tab: this.modal === 'online' ? this.ui.onlineTab : null, species: this.ui.onlineSpecies, scope: this.ui.onlineScope }));
+    this.h.online('view', JSON.stringify({ tab: this.modal === 'onlineRanking' ? 'ranking' : this.modal === 'account' ? 'account' : null, species: this.ui.onlineSpecies, scope: this.ui.onlineScope }));
   }
   /** 버튼·인증 복원·디버그 입장에 같은 인증 조건을 적용한다. */
   enterGame() {
-    if (!this.online.ready || !this.online.uid || !this.online.nickname || this.online.busy) return false;
+    if (!this.online.ready || !this.online.uid || !this.online.nickname || !this.online.admitted || this.online.busy) return false;
     if (this.started) return true;
     this.started = true;
     this.el.start.hidden = true;
@@ -265,22 +284,31 @@ export class Hud {
   setOnline(state: OnlineState) {
     if (this.online.uid !== state.uid) { this.ui.nicknameDraft = ''; this.ui.chatDraft = ''; }
     this.online = { ...state };
-    this.el.onlineEntry.textContent = state.nickname ? `${state.nickname} · 온라인` : 'Google 로그인 · 닉네임';
-    (this.el.entry as HTMLButtonElement).disabled = !state.ready || state.busy;
-    this.el.entry.textContent = !state.ready ? '계정 확인 중…' : state.busy ? '연결 중…' : state.uid ? '닉네임 설정 후 입장' : 'Google 로그인하고 입장 →';
-    if (this.started && (!state.uid || !state.ready || !state.nickname)) {
+    this.el.onlineEntry.textContent = state.nickname ? `${state.nickname} · 계정` : 'Google 로그인 · 닉네임';
+    (this.el.entry as HTMLButtonElement).disabled = !state.ready || state.busy || state.entering;
+    this.el.entry.textContent = !state.ready ? '계정 확인 중…' : state.entering ? '입장 확인 중…' : state.busy ? '연결 중…' : state.uid ? state.nickname ? '버들못 입장 →' : '닉네임 설정 후 입장' : 'Google 로그인하고 입장 →';
+    this.el.admission.textContent = state.admissionError;
+    this.el.admission.hidden = !state.admissionError;
+    this.updateCounts(); this.updateChat();
+    if (this.started && (!state.uid || !state.ready || !state.nickname || !state.admitted)) {
       this.started = false;
+      this.chatting = false;
       this.modal = 'none';
       this.el.start.hidden = false;
       this.renderModal();
       this.h.sessionEnded();
       this.syncOnlineView();
+      this.updateChat();
     }
     if (!this.started && state.ready && state.uid) {
       if (this.enterGame()) return;
-      if (!state.nickname && this.modal !== 'online') { this.ui.onlineTab = 'account'; this.open('online'); }
+      if (state.nickname && state.admissionError && this.modal !== 'none') {
+        this.modal = 'none'; this.el.start.hidden = false;
+        this.renderModal(); this.syncOnlineView();
+      }
+      if (!state.nickname && this.modal !== 'account') this.open('account');
     }
-    if (this.modal !== 'online') return;
+    if (!['account', 'onlineRanking'].includes(this.modal)) return;
     const input = document.activeElement instanceof HTMLInputElement ? document.activeElement : null;
     const id = input?.id, start = input?.selectionStart ?? null, end = input?.selectionEnd ?? null;
     const log = this.el.modal.querySelector('.chat-messages');
@@ -291,7 +319,44 @@ export class Hud {
     const next = id ? document.getElementById(id) as HTMLInputElement | null : null;
     if (next) { next.focus(); if (start !== null && end !== null) next.setSelectionRange(start, end); }
   }
-  clearChatDraft() { this.ui.chatDraft = ''; this.setOnline(this.online); }
+  clearChatDraft() { this.ui.chatDraft = ''; (this.el.chatCompose.querySelector('input') as HTMLInputElement).value = ''; }
+  focusChat() {
+    if (!this.started) return;
+    this.chatting = true; this.chatFolded = false;
+    this.modal = 'none'; this.renderModal(); this.syncOnlineView();
+    this.h.chatFocus();
+    (this.el.chatCompose.querySelector('input') as HTMLInputElement).focus();
+  }
+  closeChat() {
+    this.chatting = false;
+    (this.el.chatCompose.querySelector('input') as HTMLInputElement).blur();
+    this.updateChat();
+    if (this.modal === 'none') this.h.resume();
+  }
+  private updateCounts() {
+    this.root.querySelectorAll<HTMLElement>('[data-fishery-count]').forEach(el => {
+      el.textContent = P.fisheryOccupancy(this.online, el.dataset.fisheryCount as FisheryId);
+    });
+  }
+  private updateChat() {
+    const log = this.el.chatLog;
+    const wasAtEnd = log.scrollHeight - log.scrollTop - log.clientHeight < 50;
+    const html = P.dockMessages(this.online);
+    if (this.last.chatLog !== html) {
+      this.set('chatLog', log, html);
+      if (wasAtEnd) log.scrollTop = log.scrollHeight;
+    }
+    this.el.chat.hidden = !this.started || this.modal !== 'none';
+    this.el.chat.classList.toggle('editing', this.chatting);
+    this.el.chat.classList.toggle('folded', this.chatFolded);
+    this.el.chatFold.textContent = this.chatFolded ? '+' : '−';
+    this.el.chatFold.setAttribute('aria-expanded', String(!this.chatFolded));
+    this.el.chatCompose.hidden = !this.chatting;
+    this.el.chatHint.hidden = this.chatting;
+    (this.el.chatSend as HTMLButtonElement).disabled = this.online.busy || !this.online.admitted;
+    this.el.chatError.textContent = this.online.error;
+    this.el.chatError.hidden = !this.online.error;
+  }
 
   setPlatforms(platforms: P.PlatformStatus[], current: number | null) {
     const changed = JSON.stringify(this.platforms) !== JSON.stringify(platforms) || this.currentPlatform !== current;
@@ -326,10 +391,11 @@ export class Hud {
     const panels: Record<Exclude<Modal, 'none'>, (c: P.PanelCtx) => string> = {
       setup: P.setupPanel, keepnet: P.keepnetPanel, market: P.marketPanel, inventory: P.inventoryPanel, shop: P.shopPanel, collection: P.collectionPanel,
       records: P.recordsPanel, platforms: P.platformsPanel, quests: P.questsPanel, skills: P.skillsPanel, tournament: P.tournamentPanel,
-      settings: P.settingsPanel, pause: P.pausePanel, online: P.onlinePanel,
+      settings: P.settingsPanel, pause: P.pausePanel, account: P.accountPanel, onlineRanking: P.onlineRankingPanel,
     };
     // 터치 화면에서는 패널이 화면을 꽉 채우므로 오른쪽 위에 닫기 버튼을 따로 둔다
     box.innerHTML = this.modal === 'none' ? '' : `${panels[this.modal](c)}<button class="sheet-x" data-act="resume" aria-label="닫기"><i></i><i></i></button>`;
+    this.updateCounts(); this.updateChat();
   }
   private updateForecast() {
     if (this.modal !== 'setup') return;
