@@ -23,8 +23,6 @@ export interface TouchLayout {
   dim?: boolean;
   /** interact 버튼 이름 (들기 · 꺼내기 · 낚시점 …) */
   label?: string;
-  /** 거치해 둔 대에 입질: 큰 버튼이 깜빡인다 */
-  alert?: boolean;
   zoomOn?: boolean;
 }
 export const NO_TOUCH: TouchLayout = { main: null, alt: null, chips: [] };
@@ -161,7 +159,6 @@ export class TouchControls {
     };
     paint(this.main, l.main);
     this.main.classList.toggle('dim', !!l.dim);
-    this.main.classList.toggle('alert', !!l.alert);
     paint(this.alt, l.alt);
     this.chips.forEach((c, i) => paint(c, l.chips[i]));
   }

@@ -101,9 +101,9 @@ export class Platforms {
     for (const dx of [-6.5, 6.5]) this.box(dx, 0.13, oz, 1.3, 0.8, 6.4, '#293f40');
     this.stall('shop', '낚시점', -5.4, oz, 1, '#3f6b8a');
     this.stall('market', '어시장', 5.4, oz, -1, '#8a4b3f');
-    // 첫 좌대에서 시작한다. 앞에는 설치 자리, 뒤에는 다리 입구.
-    PLAYER.x = this.platforms[0].x;
-    PLAYER.z = this.platforms[0].z - FISHING_POSITION_OFFSET;
+    // 입장하면 출발 지점(다리 입구의 관리동 마당)에서 시작한다. 정면으로 좌대 다리, 양옆에 낚시점·어시장
+    PLAYER.x = this.office.x;
+    PLAYER.z = this.office.z + 2.2;
   }
 
   private box(x: number, y: number, z: number, w: number, h: number, d: number, color: string) {
@@ -146,7 +146,7 @@ export class Platforms {
     canvas.width = 256; canvas.height = 64;
     const ctx = canvas.getContext('2d')!;
     ctx.fillStyle = roof; ctx.fillRect(0, 0, 256, 64);
-    ctx.fillStyle = '#f6ecd0'; ctx.font = 'bold 40px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillStyle = '#f6ecd0'; ctx.font = "bold 40px 'Pretendard Variable', Pretendard, sans-serif"; ctx.textAlign = 'center';
     ctx.fillText(name, 128, 46);
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
@@ -184,7 +184,7 @@ export class Platforms {
     canvas.width = 128; canvas.height = 64;
     const ctx = canvas.getContext('2d')!;
     ctx.fillStyle = '#274c43'; ctx.fillRect(0, 0, 128, 64);
-    ctx.fillStyle = '#f3e4be'; ctx.font = 'bold 40px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillStyle = '#f3e4be'; ctx.font = "bold 40px 'Pretendard Variable', Pretendard, sans-serif"; ctx.textAlign = 'center';
     ctx.fillText(String(id).padStart(2, '0'), 64, 46);
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;

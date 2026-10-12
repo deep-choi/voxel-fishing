@@ -4,6 +4,9 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import './style.css';
+
+// 개발 서버를 127.0.0.1로 열면 Firebase 구글 로그인이 막힌다 (허용 도메인은 localhost). 같은 포트의 localhost로 옮긴다
+if (import.meta.env.DEV && location.hostname === '127.0.0.1') location.replace(location.href.replace('//127.0.0.1', '//localhost'));
 import { Sound } from './audio';
 import { BAITS, FLOATS, HOOKS, LINES, MAX_DEPLOYED_RODS, RODS, rodAction, type BaitId } from './game/data';
 import { baitProduct } from './game/realCatalog';
@@ -14,7 +17,7 @@ import { emptyOnlineState, type OnlineTab } from './game/onlineState';
 import { tournamentAvailable } from './game/tournament';
 import { Environment } from './game/environment';
 import { mods } from './game/modifiers';
-import { Tournament, TOURNAMENTS } from './game/tournament';
+import { Tournament, TOURNAMENTS, TOURNAMENTS_OPEN } from './game/tournament';
 import { Fishing } from './game/fishing';
 import { MountedRod } from './game/mountedRods';
 import { PlayerProgress } from './game/profile';
@@ -201,6 +204,7 @@ const walk = { w: false, a: false, s: false, d: false, t: 0, warnAt: -10 };
 let yaw = 0;
 let pitch = -0.08;
 let zoom = false;
+let brokenWarnAt = -1e9;
 let fov = 55;
 const input = { primary: false, lift: false, hookset: false, retrieve: false };
 
@@ -263,7 +267,8 @@ const hud = new Hud(document.getElementById('hud')!, game, player, env, settings
       }
     }).catch(() => hud.toast('온라인 연결에 실패했어요. 다시 시도해 주세요', 'bad'));
   },
-  rig(kind, id) { changeRig(kind, id); },
+  rig(kind, id, target) { changeRig(kind, id, rigGameOf(target)); },
+  rigGame(target) { return rigGameOf(target); },
   buy(kind, id) { hud.toast(player.buy(kind, id)); },
   sell() { hud.toast(`살림망 판매 +${player.sellKeepnet()}원`, 'good'); },
   sellOne(id) { hud.toast(player.sellFish(id), 'good'); },
@@ -322,7 +327,7 @@ const touch = new TouchControls(document.getElementById('hud')!, {
   tap(action) {
     if (action === 'interact') { if (game.phase === 'landed') finishCatch(true); else if (exploring()) interactSlot(); }
     if (action === 'retrieve') { if (game.phase === 'landed') finishCatch(false); else if (playing()) input.retrieve = true; }
-    if (action === 'zoom' && playing()) zoom = !zoom;
+    if (action === 'zoom' && exploring()) zoom = !zoom;
     if (action === 'stow' && exploring()) removeRod();
   },
 });
@@ -335,11 +340,11 @@ function applyTouch() {
 applyTouch();
 
 /** 터치 버튼: 지금 할 수 있는 동작만. 손에 든 대의 단계에 따라 큰 버튼이 던지기 → 챔질 → 세우기로 바뀐다 */
-function touchLayout(interact: string, nearRod: boolean, biting: boolean): TouchLayout {
+function touchLayout(interact: string, nearRod: boolean): TouchLayout {
   if (!exploring() || landing || parking) return NO_TOUCH;
   if (active) {
     switch (game.phase) {
-      case 'ready': return { main: 'cast', alt: null, chips: ['park', 'stow'] };
+      case 'ready': return { main: 'cast', alt: null, chips: ['park', 'stow', 'zoom'], zoomOn: zoom };
       case 'charging': return { main: 'cast', alt: null, chips: [] };
       case 'casting': case 'flying': return { main: 'hookset', alt: null, chips: [], dim: true };
       case 'settling': case 'waiting': return { main: 'hookset', alt: 'retrieve', chips: ['park', 'zoom'], zoomOn: zoom };
@@ -347,8 +352,8 @@ function touchLayout(interact: string, nearRod: boolean, biting: boolean): Touch
       default: return NO_TOUCH;
     }
   }
-  if (!interact) return NO_TOUCH;
-  return { main: 'interact', alt: null, chips: nearRod ? ['stow'] : [], label: biting ? `${interact} · 입질!` : interact, alert: biting };
+  // 대를 들지 않았을 때도 망원은 늘 쓸 수 있다
+  return { main: interact ? 'interact' : null, alt: null, chips: nearRod ? ['stow', 'zoom'] : ['zoom'], zoomOn: zoom, label: interact };
 }
 
 function feed() {
@@ -429,7 +434,7 @@ addEventListener('keydown', (e) => {
   if ((e.code === 'KeyG' || e.code === 'Digit4') && !e.repeat) feed();
   if (e.code === 'KeyQ' && !e.repeat) toggleModal('quests');
   if (e.code === 'KeyK' && !e.repeat) toggleModal('skills');
-  if (e.code === 'KeyT' && !e.repeat) toggleModal('tournament');
+  if (e.code === 'KeyT' && !e.repeat && TOURNAMENTS_OPEN) toggleModal('tournament');
   if (e.code === 'KeyO' && !e.repeat) toggleModal('settings');
   if (e.code === 'KeyV' && !e.repeat) toggleModal('collection');
   if (e.code === 'KeyI' && !e.repeat) toggleModal('inventory');
@@ -437,10 +442,11 @@ addEventListener('keydown', (e) => {
   if (exploring() && !e.repeat && ['Digit1', 'Digit2', 'Digit3'].includes(e.code)) takeRod(Number(e.code.slice(-1)));
   if (exploring() && !e.repeat && e.code === 'KeyE') interactSlot();
   if (exploring() && !e.repeat && e.code === 'KeyF') removeRod();
+  // 망원: 대를 들지 않아도 둘러보며 확대할 수 있다
+  if (exploring() && !e.repeat && e.code === 'KeyZ') zoom = !zoom;
   if (!playing()) return;
   if (e.code === 'KeyR' && !e.repeat) input.retrieve = true;
   if (e.code === 'Space' && !e.repeat) input.hookset = true;
-  if (e.code === 'KeyZ') zoom = !zoom;
 });
 addEventListener('keyup', (e) => {
   if (e.code === 'KeyW') walk.w = false;
@@ -481,32 +487,37 @@ function travelFishery(id: string) {
   url.searchParams.set('map', target.id);
   location.assign(url.href);
 }
-function changeRig(kind: string, id: string) {
-  if (!game.canRig) return;
+/** 채비 창의 대: 자리 id면 그 대, 'default'면 새로 꺼낼 대의 기본 채비 */
+function rigGameOf(target: string) {
+  return target === 'default' ? idleGame : mounted.get(target)?.game ?? game;
+}
+/** 채비 바꾸기: 고른 대(g)만 바뀐다. 기본 채비를 바꾸면 새로 꺼내는 대가 그 채비로 나온다 */
+function changeRig(kind: string, id: string, g: Fishing = game) {
+  if (!g.canRig) return;
   if (kind === 'rod') {
     const rod = RODS.find(r => r.id === id);
     if (!rod) return;
-    const used = Array.from(mounted.values()).filter(m => m !== active && m.game.rodId === id).length;
+    const used = Array.from(mounted.values()).filter(m => m.game !== g && m.game.rodId === id).length;
     if ((player.data.rods[id] ?? 0) <= used) { hud.toast('사용 가능한 낚싯대가 없어요. 상점에서 구매하세요'); return; }
-    game.rodId = id; game.depthSet = Math.min(game.depthSet, rod.line);
+    g.rodId = id; g.depthSet = Math.min(g.depthSet, rod.line);
   }
-  if (kind === 'float' && FLOATS.some(f => f.id === id) && player.data.floats.includes(id)) game.floatId = id;
-  if (kind === 'hook' && HOOKS.some(h => h.id === id) && player.data.hooks.includes(id)) game.hookId = id;
-  if (kind === 'bait' && Object.hasOwn(BAITS, id)) { game.bait = id as BaitId; game.baitProductId = undefined; }
+  if (kind === 'float' && FLOATS.some(f => f.id === id) && player.data.floats.includes(id)) g.floatId = id;
+  if (kind === 'hook' && HOOKS.some(h => h.id === id) && player.data.hooks.includes(id)) g.hookId = id;
+  if (kind === 'bait' && Object.hasOwn(BAITS, id)) { g.bait = id as BaitId; g.baitProductId = undefined; }
   if (kind === 'baitProduct') {
     const product = baitProduct(id);
     if (!product || !(player.data.baitProducts[id] > 0)) return;
-    if (product.baseBait === 'chum') game.chumProductId = id;
-    else { game.bait = product.baseBait; game.baitProductId = id; }
+    if (product.baseBait === 'chum') g.chumProductId = id;
+    else { g.bait = product.baseBait; g.baitProductId = id; }
   }
-  if (kind === 'chum') game.chumProductId = undefined;
+  if (kind === 'chum') g.chumProductId = undefined;
   if (kind === 'line') {
     const idx = Math.max(0, Math.min(LINES.length - 1, Number(id)));
-    if (player.data.lines.includes(LINES[idx].id)) game.lineIdx = idx;
+    if (player.data.lines.includes(LINES[idx].id)) g.lineIdx = idx;
   }
-  if (kind === 'depth') game.depthSet = Math.max(0.3, Math.min(game.rod.line, Number(id)));
-  player.data.rig = game.rig;
-  active?.renderNow();
+  if (kind === 'depth') g.depthSet = Math.max(0.3, Math.min(g.rod.line, Number(id)));
+  if (g === idleGame) player.data.rig = g.rig;
+  Array.from(mounted.values()).find(m => m.game === g)?.renderNow();
   savePlacement();
 }
 function selectRod(next: MountedRod | null) {
@@ -637,14 +648,9 @@ let fishModel: FishModel | null = null;
 let heldFish: FishModel | null = null;
 
 function connectGame(source: Fishing) { source.on((e) => {
-  if (e.type === 'bite') {
-    const placed = Array.from(mounted.values()).find(m => m.game === source);
-    // 손에 든 대는 찌로 보이니 알림 없이 소리만, 거치한 대만 알림
-    if (placed && placed !== active) hud.toast(`${placed.slot.number}번 낚싯대 입질!`, 'good');
-    if (placed) sound.bite();
-    if (settings.vibrate) navigator.vibrate?.(120);
-  }
+  // 입질은 알리지 않는다: 소리·진동·안내 없이 오로지 찌를 보고 알아챈다
   // 파이팅이 끝나면 닳은 장비 상태를 저장한다
+  if (e.type === 'lost' && e.reason === 'rod') player.addWear(`rod:${source.rodId}`, 1);
   if (e.type === 'landed' || e.type === 'lost') player.save();
   if (source !== game) {
     if (e.type === 'ripple') water.ripple(e.x, e.z, e.size);
@@ -843,14 +849,14 @@ function updateTackle(dt: number) {
   pull.subVectors(lineEnd, restTip);
   const hasPull = (game.floatInWater || landing !== null || ph === 'charging') && pull.lengthSq() > 0.01;
   if (hasPull) pull.normalize();
-  const bend = landing ? Math.min(0.95, 0.25 + landing.kg * 0.25) : ph === 'charging' ? 0.04 + game.castPower * 0.18 : ph === 'fighting' ? Math.min(1, Math.pow(game.tension / game.rod.power, 0.8)) : ph === 'waiting' || ph === 'settling' ? 0.03 : 0;
+  const bend = landing ? Math.min(0.95, 0.25 + landing.kg * 0.25) : ph === 'charging' ? 0.04 + game.castPower * 0.18 : ph === 'fighting' ? Math.min(1, Math.pow(game.tension / game.rod.power, 0.55)) : ph === 'waiting' || ph === 'settling' ? 0.03 : 0;
   const shaking = ph === 'fighting' && game.fish?.behavior === 'shake';
   const quiver = ph === 'fighting' ? Math.min(1, game.tension / game.rod.power) * (shaking ? 1 : 0.2) : 0;
   rod.update(pose, hasPull ? pull : null, bend, game.rod.length, dt, game.rod.flex, rodAction(game.rodId), quiver);
   // 모바일: 바늘털이마다 짧은 진동
   if (shaking && settings.vibrate && shared.uTime.value - lastVibe > 0.5) { navigator.vibrate?.([20, 30, 20]); lastVibe = shared.uTime.value; }
   hands.update(pose, hud.started && handBlend > 0.25 && (ph !== 'landed' || landing !== null));
-  float.setScale(game.floatSpec.scale);
+  float.setSpec(game.floatSpec);
   updateHookedFish(dt);
 
   const hanging = ph === 'ready' || ph === 'charging' || ph === 'casting' || ph === 'landed';
@@ -1068,6 +1074,8 @@ function updateWalk(dt: number, t: number) {
         walk.warnAt = t;
       }
     } else {
+      // 걷기 시작하면 망원이 풀린다
+      zoom = false;
       const fx = -Math.sin(yaw);
       const fz = -Math.cos(yaw);
       let dx = fx * iz + -fz * ix;
@@ -1125,15 +1133,17 @@ function updateCamera(dt: number, t: number) {
   }
 }
 
-/** 찌톱 전체 높이 (m): 마디 10개 */
-const FLOAT_TOP_M = 0.2;
+/** 찌 확대 창: 끔. 찌는 Z 망원으로 직접 본다 */
+const SHOW_PIP = false;
 function renderPip() {
+  if (!SHOW_PIP) return false;
   const show = hud.started && active !== null && (game.phase === 'settling' || game.phase === 'waiting') && !game.floatOnLand;
   if (!show) return false;
   const r = hud.pipRect;
   const fp = game.float;
   const dir = new THREE.Vector3(PLAYER.x - fp.x, 0, PLAYER.z - fp.z).normalize();
-  const top = Math.max(0.02, game.floatDy + FLOAT_TOP_M * game.floatSpec.scale);
+  // 찌톱 높이 (m): 마디 하나 약 2cm. 장찌는 길고 단찌는 짧다
+  const top = Math.max(0.02, game.floatDy + (game.floatSpec.notches ?? 10) * 0.02 * game.floatSpec.scale);
   const look = WATER_Y + Math.min(0.1, top * 0.6) + Math.max(0, top - 0.16) * 0.6;
   pipCam.position.set(fp.x + dir.x * 1.1, look + 0.08, fp.z + dir.z * 1.1);
   pipCam.lookAt(fp.x, look, fp.z);
@@ -1191,8 +1201,9 @@ function updateWorld(dt: number) {
   const dark = THREE.MathUtils.smoothstep(1 - env.daylight, 0.25, 0.75);
   sound.setAmbience(dark, env.weather === 'rain');
   const glowOn = (g: Fishing) => {
-    const lit = g.floatSpec.glow ?? 0;
-    const color = g.floatSpec.id === 'electro' ? '#ff5a3c' : '#d4ff6a';
+    const s = g.floatSpec, lit = s.glow ?? 0;
+    // 변색 전자찌: 찌가 올라오면 색이 바뀐다
+    const color = s.shift && g.floatRise > 0.03 ? s.shift : s.glowColor ?? (s.light === 'electro' ? '#ff5a3c' : '#d4ff6a');
     return [lit ? 0.35 + lit * dark * 2.5 : 0.35 - 0.2 * dark, lit ? Math.min(1, dark * 1.6) : 0, color] as const;
   };
   float.setGlow(...glowOn(game));
@@ -1216,9 +1227,17 @@ function frame(dt: number, render = true) {
   if (!paused) {
     if (hud.started) updateWorld(dt);
     grounds.update(dt);
+    // 챔질(대를 드는 순간) 망원이 풀린다
+    if (input.hookset && playing() && handBlend >= 0.85) zoom = false;
+    // 부러진 낚싯대는 수리하기 전까지 던질 수 없다
+    const broken = game.phase === 'ready' && player.wearOf(`rod:${game.rodId}`) >= 1;
+    if (broken && input.primary && playing() && performance.now() - brokenWarnAt > 3000) {
+      hud.toast('부러진 낚싯대예요 · 관리동 낚시점에서 수리할 수 있어요', 'bad');
+      brokenWarnAt = performance.now();
+    }
     game.update({
       dt,
-      primary: input.primary && playing() && handBlend >= 0.85,
+      primary: input.primary && playing() && handBlend >= 0.85 && !broken,
       lift: input.lift && playing() && handBlend >= 0.85,
       hookset: input.hookset && playing() && handBlend >= 0.85,
       retrieve: input.retrieve && playing() && handBlend >= 0.85,
@@ -1245,28 +1264,28 @@ function frame(dt: number, render = true) {
   const here = platforms.current(PLAYER.x, PLAYER.z);
   hud.setPlatforms(platforms.platforms.map(p => ({ id: p.id, name: p.name,
     rods: p.slots.filter(s => mounted.has(s.id)).length,
-    bites: p.slots.filter(s => { const g = mounted.get(s.id)?.game; return g?.debugBiteInfo || g?.phase === 'fighting'; }).length,
+    bites: p.slots.filter(s => mounted.get(s.id)?.game.phase === 'fighting').length,
   })), here?.id ?? null);
   const nearRod = near ? mounted.get(near.id) : undefined;
   const stallNear = platforms.nearStall(PLAYER.x, PLAYER.z);
   const prompt = active
     ? !parking && (game.phase === 'waiting' || game.phase === 'settling') ? '<kbd>E</kbd> 거치' : ''
     : stallNear ? `<kbd>E</kbd> ${stallNear.name}`
-    : nearRod ? `<kbd>E</kbd> 들기${nearRod.game.debugBiteInfo ? ' · 입질!' : ''}`
+    : nearRod ? '<kbd>E</kbd> 들기'
     : near && mounted.size < MAX_DEPLOYED_RODS ? '<kbd>E</kbd> 낚싯대 꺼내기' : '';
   hud.setInteraction(prompt, active ? `${active.slot.platform}번 좌대 · 낚싯대 ${active.slot.number}` : null);
   if (document.body.classList.contains('touch')) {
     const label = stallNear ? stallNear.name : nearRod ? '들기' : near && mounted.size < MAX_DEPLOYED_RODS ? '꺼내기' : '';
-    touch.setLayout(touchLayout(label, !!nearRod, !!nearRod?.game.debugBiteInfo));
+    touch.setLayout(touchLayout(label, !!nearRod));
   }
   hud.setRodSlots(Array.from(mounted.values(), (m, i) => ({ slotId: m.slot.id, number: here ? m.slot.number : i + 1, rodId: m.game.rodId, name: m.game.rod.name, platform: m.slot.platform,
-    state: m === active ? parking ? '거치 중' : '손에 듦' : m.game.phase === 'fighting' ? '물고기 걸림' : m.game.debugBiteInfo ? '입질!' : '거치됨',
-    active: m === active, biting: m.game.debugBiteInfo !== null || m.game.phase === 'fighting' })));
+    state: m === active ? parking ? '거치 중' : '손에 듦' : m.game.phase === 'fighting' ? '물고기 걸림' : '거치됨',
+    active: m === active, biting: m.game.phase === 'fighting' })));
   for (const s of platforms.slots) {
     const g = mounted.get(s.id)?.game;
-    const biting = g?.debugBiteInfo || g?.phase === 'fighting';
+    const biting = g?.phase === 'fighting';
     const mat = s.marker.material as THREE.MeshLambertMaterial;
-    // 받침대 표시: 입질 주황 / 거치 초록 / 빈자리 노랑
+    // 받침대 표시: 물고기 걸림 주황 / 거치 초록 / 빈자리 노랑 (입질은 표시하지 않는다)
     mat.color.set(biting ? '#ffae62' : mounted.has(s.id) ? '#83b8a4' : '#eac67d');
     mat.emissiveIntensity = biting ? 0.7 + Math.sin(t * 8) * 0.3 : 0.2;
   }

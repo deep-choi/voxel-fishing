@@ -527,8 +527,7 @@ body.pixel #hud,
 body.pixel .btn,
 body.pixel .choice,
 body.pixel kbd {
-  font-family: 'Galmuri11', 'Pretendard Variable', monospace;
-  -webkit-font-smoothing: none;
+  font-family: 'Pretendard Variable', Pretendard, system-ui, sans-serif;
 }
 body.pixel .start-card,
 body.pixel .panel,
@@ -695,11 +694,11 @@ body.voxel {
   --accent: #f1d471;
   --good: #abdf79;
   --bad: #ff9578;
-  font-family: 'Galmuri11', monospace;
+  font-family: 'Pretendard Variable', Pretendard, system-ui, sans-serif;
 }
+/* 글꼴은 하나: 프리텐다드 고딕 */
 body.voxel #hud, body.voxel button, body.voxel kbd, body.voxel input {
-  font-family: 'Galmuri11', monospace;
-  -webkit-font-smoothing: none;
+  font-family: 'Pretendard Variable', Pretendard, system-ui, sans-serif;
 }
 body.voxel :is(.start-card, .panel, .catch-card, .tackle, .fight, .toast, .interaction, .map-toggle, .pip, .btn, .choice, .platform-choice, .species-card, .inventory-item, .rod-slot, .game-menu button, .map-dot, kbd, .meter, .meter i, .power, .power i) {
   border-radius: 0;

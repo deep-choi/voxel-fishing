@@ -1,6 +1,6 @@
 // 소리: 파일 없이 Web Audio로 합성한다.
 // 배경: 잔잔한 바람·물가 찰랑임 + 낮에는 새, 해 질 녘부터 귀뚜라미·개구리, 비 오면 빗소리.
-// 효과: 캐스팅·찌 착수·입질. (챔질·원줄 울음 소리는 나중에 녹음 소리로 넣는다)
+// 효과: 캐스팅·찌 착수. 입질은 소리 없이 찌로만 본다. (챔질·원줄 울음 소리는 나중에 녹음 소리로 넣는다)
 
 export class Sound {
   private ctx: AudioContext | null = null;
@@ -27,10 +27,20 @@ export class Sound {
     if (this.ctx) this.master.gain.setTargetAtTime(v, this.ctx.currentTime, 0.05);
   }
 
-  /** 사용자 입력 뒤에 호출 (브라우저 자동재생 정책) */
+  private waitingGesture = false;
+  /** 소리를 낼 수 있는 상태인지 (브라우저가 막고 있으면 아무것도 만들지 않는다) */
+  private get live() { return this.ctx?.state === 'running'; }
+
+  /**
+   * 소리 켜기. 브라우저는 사용자가 화면을 누르거나 키를 치기 전에는 소리를 막는다(자동재생 정책).
+   * 로그인 복원으로 자동 입장할 때처럼 아직 입력이 없으면, 첫 입력 때 켜지도록 기다린다.
+   * (입력 전에 AudioContext를 만들면 콘솔에 경고가 쌓인다)
+   */
   start() {
+    const activated = (navigator as Navigator & { userActivation?: { hasBeenActive: boolean } }).userActivation?.hasBeenActive ?? true;
+    if (!activated) { this.startOnGesture(); return; }
     if (this.ctx) {
-      void this.ctx.resume();
+      if (this.ctx.state === 'suspended') void this.ctx.resume().catch(() => {});
       return;
     }
     const ctx = new AudioContext();
@@ -108,6 +118,18 @@ export class Sound {
     this.loop(1.1).connect(sf).connect(this.sliceGain).connect(this.master);
   }
 
+  /** 첫 클릭·터치·키 입력 때 한 번 소리를 켠다 */
+  private startOnGesture() {
+    if (this.waitingGesture) return;
+    this.waitingGesture = true;
+    const go = () => {
+      for (const type of ['pointerdown', 'keydown', 'touchend'] as const) removeEventListener(type, go, true);
+      this.waitingGesture = false;
+      this.start();
+    };
+    for (const type of ['pointerdown', 'keydown', 'touchend'] as const) addEventListener(type, go, true);
+  }
+
   private loop(offset: number): AudioBufferSourceNode {
     const src = this.ctx!.createBufferSource();
     src.buffer = this.noise;
@@ -118,7 +140,7 @@ export class Sound {
 
   private burst(dur: number, filter: BiquadFilterType, freq: number, gain: number, sweepTo?: number, q = 1) {
     const ctx = this.ctx;
-    if (!ctx) return;
+    if (!ctx || !this.live) return;
     const t = ctx.currentTime;
     const src = ctx.createBufferSource();
     src.buffer = this.noise;
@@ -146,7 +168,6 @@ export class Sound {
     if (size > 0.5) this.burst(0.15, 'bandpass', 3500, 0.05 * v);
   }
 
-  bite() { this.burst(0.09, 'bandpass', 1600, 0.055, 2300); }
 
   /** 시간·날씨: 낮엔 새, 어두워지면 귀뚜라미·개구리, 비 오면 빗소리 */
   setAmbience(dark: number, raining: boolean) {
@@ -160,7 +181,8 @@ export class Sound {
 
   /** 매 프레임 */
   update(dt: number, load = 0, shake = 0, slice = 0) {
-    if (!this.ctx) return;
+    // 막혀 있거나(입력 전) 멈춘 동안에는 새 소리를 만들지 않는다
+    if (!this.ctx || !this.live) return;
     const t = this.ctx.currentTime;
     const stress = Math.max(0, Math.min(1, load));
     this.loadGain?.gain.setTargetAtTime(stress ** 1.4 * (0.05 + shake * 0.02), t, 0.05);

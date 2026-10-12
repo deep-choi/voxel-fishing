@@ -40,6 +40,26 @@
 .lakeside-chat.folded .dock-messages, .lakeside-chat.folded .dock-compose, .lakeside-chat.folded .chat-open, .lakeside-chat.folded .dock-error { display: none; }
 .admission-note { color: #ad422e; font-size: 12px; line-height: 1.7; }
 .fishery-occupancy { display: block; margin-top: 8px; font-size: 12px; font-weight: 700; color: #364c31; }
-@media (max-width: 800px) { .lakeside-chat { left: 12px; bottom: 100px; width: min(380px, 48vw); min-width: 210px; } .dock-messages { height: 135px; } }
-body.touch .lakeside-chat { bottom: 148px; left: 12px; width: min(350px, 47vw); min-width: 195px; }
-body.touch .dock-messages { height: min(125px, 20dvh); }
+/* ── 채팅: 완전 투명. 배경·테두리 없이 글자 그림자만 (마인크래프트 채팅처럼) ── */
+.lakeside-chat, .lakeside-chat.editing { width: min(440px, calc(50vw - 150px)); min-width: 0; background: transparent; border: 0; text-shadow: 1px 1px 0 #000, 0 0 3px #000c; pointer-events: none; }
+/* 버튼·입력칸만 누를 수 있고, 나머지는 화면 조작(둘러보기)을 막지 않는다 */
+.lakeside-chat :is(button, input), .lakeside-chat.editing .dock-messages { pointer-events: auto; }
+.lakeside-chat header { background: transparent; opacity: 0.75; }
+.lakeside-chat button:hover { background: transparent; color: #fff; }
+.chat-title { padding-left: 0 !important; }
+.dock-messages { height: clamp(90px, 20vh, 200px); padding: 0; -webkit-mask-image: linear-gradient(to bottom, transparent, #000 28%); mask-image: linear-gradient(to bottom, transparent, #000 28%); }
+.dock-message { margin: 3px 0; }
+.dock-compose { padding: 4px 0 0; border-top: 0; }
+.dock-compose input { background: #00000040; border: 1px solid #ffffff40; }
+.dock-compose button { background: #59783cb0; }
+.chat-open { padding-left: 0 !important; opacity: 0.6; }
+
+/* 좁거나 낮은 화면·모바일: 아래쪽(핫바·조이스틱·버튼)을 비우고 왼쪽 위 살림망 고리 밑으로 */
+@media (max-width: 900px), (max-height: 520px) {
+  .lakeside-chat { top: calc(74px + env(safe-area-inset-top, 0px)); bottom: auto; left: calc(10px + env(safe-area-inset-left, 0px)); width: min(300px, 38vw); }
+  .lakeside-chat header { font-size: 10px; }
+  .dock-messages { height: min(84px, 22dvh); }
+  .dock-message { font-size: 11px; line-height: 1.45; }
+}
+body.touch .lakeside-chat { top: calc(70px + var(--sat, 0px)); bottom: auto; left: calc(8px + var(--sal, 0px)); width: min(300px, 38vw); }
+body.touch .dock-messages { height: min(84px, 22dvh); }

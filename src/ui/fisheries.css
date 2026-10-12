@@ -1,5 +1,5 @@
 /* 낚시터 선택은 메뉴와 시작 화면 안에만 표시한다. 플레이 화면은 기존의 간결한 HUD를 유지한다. */
-.start .start-card, body.voxel .start .start-card { width: min(920px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto; }
+.start .start-card, body.voxel .start .start-card { width: min(420px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto; }
 .start .start-card .keys { columns: 2; margin: 16px 0; }
 .fishery-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 16px 0 22px; }
 .fishery-card { display: block; padding: 10px; text-align: left; color: #263126; background: #d6d5c3; font: inherit; cursor: pointer; border: 3px solid #4d5646; border-radius: 0; box-shadow: inset 2px 2px #f6f3dd, inset -2px -2px #8d9280; }

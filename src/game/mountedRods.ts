@@ -56,7 +56,7 @@ export class MountedRod {
     const g = this.game;
     this.pull.subVectors(g.float, this.restTip).normalize();
     this.rod.update(this.pose, g.floatInWater ? this.pull : null, g.phase === 'fighting' ? Math.min(1, g.tension / g.rod.power) : 0.02, g.rod.length, dt, g.rod.flex, rodAction(g.rodId));
-    this.float.setScale(g.floatSpec.scale);
+    this.float.setSpec(g.floatSpec);
     if (g.floatInWater) {
       this.float.place(g.float.x + g.floatSide, g.floatOnLand ? g.float.y : g.phase === 'flying' ? g.float.y : WATER_Y + g.floatDy, g.float.z, g.floatTilt, Math.PI / 2);
     } else this.float.hang(this.rod.tip.x, Math.max(WATER_Y + 0.08, this.rod.tip.y - 0.9), this.rod.tip.z, 0, 0);

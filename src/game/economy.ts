@@ -1,6 +1,7 @@
 import { rankOf, SPECIES, SPECIES_LIST, type SpeciesId } from './data';
 import { seeded } from './environment';
 import { SPECIES_RULES } from './items';
+import { TOURNAMENTS_OPEN } from './tournament';
 
 // 경제: 오늘의 시세, 일일 의뢰, 업적. 날짜를 씨앗으로 써서 서버 없이도 모두 같은 값을 본다.
 
@@ -65,5 +66,5 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: 'dexall', name: '버들못 박사', desc: `${SPECIES_LIST.length}종 도감을 완성한다`, coins: 2000, check: s => [new Set(s.catches.map(c => c.species)).size, SPECIES_LIST.length] },
   { id: 'rich', name: '만원의 행복', desc: '판매로 10,000원을 번다', coins: 800, check: s => [Math.min(10000, s.earned), 10000] },
   { id: 'eco', name: '생태 지킴이', desc: '고기 30마리를 방생한다', coins: 400, check: s => [Math.min(30, s.released), 30] },
-  { id: 'champ', name: '대회 우승', desc: '낚시 대회에서 1등을 한다', coins: 1000, check: s => [Math.min(1, s.wins), 1] },
 ];
+if (TOURNAMENTS_OPEN) ACHIEVEMENTS.push({ id: 'champ', name: '대회 우승', desc: '낚시 대회에서 1등을 한다', coins: 1000, check: s => [Math.min(1, s.wins), 1] });

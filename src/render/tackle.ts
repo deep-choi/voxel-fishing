@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { ROD } from '../game/data';
+import { FLOATS, ROD, type FloatShape, type FloatSpec } from '../game/data';
 import { WATER_Y } from '../world/lake';
 
 // 낚싯대(휘어짐), 스피닝 릴, 한국식 민물 찌, 낚싯줄, 물보라.
@@ -192,49 +192,72 @@ export class Rod {
 }
 
 /** 찌: 원점 = 물에 잠기는 기준선. 위로 찌톱 색띠 6cm가 수면 위에 선다 */
+/** 찌톱 한 마디 (찌 자체 좌표). 화면에서는 SCALE배 = 약 2cm */
+const NOTCH = 0.0125;
+/** 몸통 모양: 길이·굵기·단면(a 볼록 위치, b 뾰족함)·색 */
+interface FloatLook { topR: number; body: number; bodyR: number; a: number; b: number; color: string; band: string; foot: number; rings?: string; gloss?: boolean }
+const FLOAT_LOOKS: Record<FloatShape, FloatLook> = {
+  // 오동나무 막대찌: 위쪽이 볼록한 유선형
+  stick: { topR: 0.0029, body: 0.17, bodyR: 0.0085, a: 0.75, b: 0.9, color: '#3a0d0d', band: '#c8a040', foot: 0.08, gloss: true },
+  // 단찌: 짧고 굵다
+  short: { topR: 0.0034, body: 0.1, bodyR: 0.0098, a: 0.8, b: 0.8, color: '#1f3a24', band: '#c8a040', foot: 0.05, gloss: true },
+  // 나노·내림찌: 가늘고 길게 빠진다
+  slim: { topR: 0.0021, body: 0.2, bodyR: 0.0058, a: 0.55, b: 1.2, color: '#1d2a3a', band: '#d8d8d8', foot: 0.11, gloss: true },
+  // 대물 올림찌: 달걀처럼 굵은 몸통
+  egg: { topR: 0.0034, body: 0.14, bodyR: 0.0135, a: 0.9, b: 0.6, color: '#5a1a10', band: '#c8a040', foot: 0.07, gloss: true },
+  // 장찌: 길쭉한 막대
+  long: { topR: 0.0027, body: 0.26, bodyR: 0.0085, a: 0.7, b: 0.9, color: '#2b1a3a', band: '#c8a040', foot: 0.1, gloss: true },
+  // 갈대찌: 옅은 갈대색에 마디 고리
+  reed: { topR: 0.0028, body: 0.2, bodyR: 0.0072, a: 0.6, b: 0.8, color: '#c9b27a', band: '#6a4a20', foot: 0.08, rings: '#8d7240' },
+  // 공작찌: 상아색 깃대에 갈색 줄
+  peacock: { topR: 0.0024, body: 0.22, bodyR: 0.0066, a: 0.5, b: 1.1, color: '#ddd3bb', band: '#2a6a8a', foot: 0.09, rings: '#6b5a3a' },
+  // 전자찌: 검은 전지 몸통에 은색 띠
+  electro: { topR: 0.0029, body: 0.16, bodyR: 0.0092, a: 0.8, b: 0.7, color: '#141414', band: '#c0c0c0', foot: 0.07, gloss: true },
+};
+
 export class Float {
   readonly group = new THREE.Group();
   private readonly body = new THREE.Group();
   static readonly SCALE = 1.6;
-  /** 찌톱 색 띠 재질: 밤에 케미·전자찌가 빛나게 */
-  private readonly tips: THREE.MeshStandardMaterial[] = [];
-  setScale(scale: number) { this.body.scale.setScalar(Float.SCALE * scale); }
-  /** 찌톱 끝 케미 불빛 번짐: 멀리서도 보이게 화면을 향하는 빛 판 */
+  /** 찌톱 색 띠 재질: 밤에 은은하게 */
+  private tips: THREE.MeshStandardMaterial[] = [];
+  /** 케미라이트·LED: 밤에 찌 불빛의 중심 */
+  private lamp: THREE.MeshStandardMaterial | null = null;
+  /** 찌톱 높이 (찌 좌표) */
+  private top = 10 * NOTCH;
+  private specId = '';
+  /** 찌톱 끝 불빛 번짐: 멀리서도 보이게 화면을 향하는 빛 판 */
   private readonly halo: THREE.Sprite;
+  private readonly parts = new THREE.Group();
+
   /**
    * @param intensity 찌톱 띠 자체 밝기
-   * @param halo 케미 불빛 번짐 0~1 (어두울수록 크다)
-   * @param color 케미 색 (케미라이트 연두 / 전자찌 빨강)
+   * @param halo 불빛 번짐 0~1 (어두울수록 크다)
+   * @param color 불빛 색 (케미 연두 / 전자찌 빨강·초록)
    */
   setGlow(intensity: number, halo = 0, color = '#b8ff5a') {
-    for (const m of this.tips) m.emissiveIntensity = intensity;
+    for (const m of this.tips) m.emissiveIntensity = this.lamp ? Math.min(intensity, 0.5) : intensity;
+    if (this.lamp) {
+      this.lamp.color.set(color);
+      this.lamp.emissive.set(color);
+      this.lamp.emissiveIntensity = 0.5 + halo * 3;
+    }
     const mat = this.halo.material;
     mat.opacity = halo;
     mat.color.set(color);
     this.halo.visible = halo > 0.01;
   }
 
+  /** 찌 종류가 바뀌면 모양을 다시 만든다 (같은 찌면 크기만) */
+  setSpec(spec: FloatSpec) {
+    this.body.scale.setScalar(Float.SCALE * spec.scale);
+    if (spec.id === this.specId) return;
+    this.specId = spec.id;
+    this.build(spec);
+  }
+
   constructor() {
-    const glow = (c: string, e = 0.35) => {
-      const m = new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: e, roughness: 0.35 });
-      this.tips.push(m);
-      return m;
-    };
-    // 찌톱: 물 위로 길게 올라온 마디 띠 (빨강·노랑·초록이 번갈아). 맨 아래 검은 띠는 물속
-    const TOP = 0.125;
-    const colors = ['#ff3a1a', '#ffd400', '#20d050'];
-    const bands: [string, number, number][] = [];
-    for (let i = 0, y = TOP; y > 0.0005; i++, y -= 0.0125) bands.push([colors[i % 3], y, Math.max(0, y - 0.0125)]);
-    bands.push(['#ff3a1a', 0, -0.015], ['#181818', -0.015, -0.045]);
-    for (const [c, top, bot] of bands) {
-      const m = new THREE.Mesh(new THREE.CylinderGeometry(0.0029, 0.0029, top - bot, 8), glow(c));
-      m.position.y = (top + bot) / 2;
-      this.body.add(m);
-    }
-    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.0029, 8, 6), glow('#ff3a1a'));
-    cap.position.y = TOP;
-    this.body.add(cap);
-    // 케미 불빛 번짐: 방사형 그라데이션을 더해 그린다 (톤매핑에 눌리지 않게)
+    // 불빛 번짐: 방사형 그라데이션을 더해 그린다 (톤매핑에 눌리지 않게)
     const canvas = document.createElement('canvas');
     canvas.width = canvas.height = 64;
     const ctx = canvas.getContext('2d')!;
@@ -249,30 +272,92 @@ export class Float {
     this.halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas), color: '#b8ff5a', transparent: true, opacity: 0,
       blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
     this.halo.scale.setScalar(0.16);
-    this.halo.position.y = TOP;
     this.halo.visible = false;
-    this.body.add(this.halo);
-    // 몸통 (오동나무·발사 느낌의 유선형)
-    const pts: THREE.Vector2[] = [];
-    for (let i = 0; i <= 16; i++) {
-      const t = i / 16;
-      const r = 0.0085 * Math.pow(Math.sin(Math.PI * Math.pow(t, 0.75)), 0.9) + 0.0015;
-      pts.push(new THREE.Vector2(r, -0.045 - t * 0.17));
-    }
-    const lathe = new THREE.Mesh(
-      new THREE.LatheGeometry(pts, 14),
-      new THREE.MeshPhysicalMaterial({ color: '#3a0d0d', roughness: 0.25, clearcoat: 1 }),
-    );
-    this.body.add(lathe);
-    const goldBand = new THREE.Mesh(new THREE.CylinderGeometry(0.0062, 0.0062, 0.004, 14), new THREE.MeshStandardMaterial({ color: '#c8a040', metalness: 0.9, roughness: 0.3 }));
-    goldBand.position.y = -0.07;
-    this.body.add(goldBand);
-    const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.0012, 0.0012, 0.08, 6), new THREE.MeshStandardMaterial({ color: '#d8d0b0' }));
-    foot.position.y = -0.255;
-    this.body.add(foot);
+    this.halo.frustumCulled = false;
+    this.body.add(this.parts, this.halo);
     this.body.scale.setScalar(Float.SCALE);
     this.group.add(this.body);
-    this.group.traverse((o) => (o.frustumCulled = false));
+    this.setSpec(FLOATS[0]);
+  }
+
+  private build(spec: FloatSpec) {
+    for (const o of this.parts.children) {
+      const m = o as THREE.Mesh;
+      m.geometry.dispose();
+      (m.material as THREE.Material).dispose();
+    }
+    this.parts.clear();
+    this.tips = [];
+    this.lamp = null;
+    const look = FLOAT_LOOKS[spec.shape ?? 'stick'];
+    const add = (geo: THREE.BufferGeometry, mat: THREE.Material, y: number) => {
+      const m = new THREE.Mesh(geo, mat);
+      m.position.y = y;
+      m.frustumCulled = false;
+      this.parts.add(m);
+      return m;
+    };
+    const glow = (c: string, e = 0.35) => {
+      const m = new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: e, roughness: 0.35 });
+      this.tips.push(m);
+      return m;
+    };
+    const lampMat = (c: string) => (this.lamp = new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0.5, roughness: 0.2, transparent: true, opacity: 0.92 }));
+    const tube = (r: number, top: number, bot: number, mat: THREE.Material) => add(new THREE.CylinderGeometry(r, r, top - bot, 8), mat, (top + bot) / 2);
+
+    // 찌톱: 물 위로 올라온 마디 띠 (빨강·노랑·초록이 번갈아). 맨 아래 검은 띠는 물속
+    const n = spec.notches ?? 10;
+    this.top = n * NOTCH;
+    const colors = ['#ff3a1a', '#ffd400', '#20d050'];
+    // 전자찌는 위쪽 세 마디가 LED 관
+    const ledFrom = spec.light === 'electro' ? this.top - 3 * NOTCH : this.top;
+    for (let i = 0, y = ledFrom; y > 0.0005; i++, y -= NOTCH) tube(look.topR, y, Math.max(0, y - NOTCH), glow(colors[i % 3]));
+    tube(look.topR, 0, -0.015, glow('#ff3a1a'));
+    tube(look.topR * 1.1, -0.015, -0.045, new THREE.MeshStandardMaterial({ color: '#181818', roughness: 0.5 }));
+    let lightTop = this.top;
+    const color = spec.glowColor ?? (spec.light === 'electro' ? '#ff5a3c' : '#d4ff6a');
+    if (spec.light === 'electro') {
+      const led = lampMat(color);
+      tube(look.topR * 1.25, this.top, ledFrom, led);
+      add(new THREE.SphereGeometry(look.topR * 1.25, 8, 6), led, this.top);
+    } else if (spec.light === 'chemi') {
+      // 케미 꽂이: 찌톱 끝 투명 관에 케미라이트 한 개
+      lightTop = this.top + 3 * NOTCH;
+      tube(look.topR * 1.4, this.top + 0.005, this.top - 0.006, new THREE.MeshStandardMaterial({ color: '#e8e8e8', roughness: 0.3, transparent: true, opacity: 0.6 }));
+      const chemi = lampMat(color);
+      tube(look.topR * 1.15, lightTop, this.top, chemi);
+      add(new THREE.SphereGeometry(look.topR * 1.15, 8, 6), chemi, lightTop);
+    } else {
+      add(new THREE.SphereGeometry(look.topR, 8, 6), glow('#ff3a1a'), this.top);
+    }
+    this.halo.position.y = lightTop;
+
+    // 몸통: 모양별 단면을 돌려 만든다
+    const pts: THREE.Vector2[] = [];
+    const radius = (t: number) => look.bodyR * Math.pow(Math.sin(Math.PI * Math.pow(t, look.a)), look.b) + 0.0015;
+    for (let i = 0; i <= 18; i++) {
+      const t = i / 18;
+      pts.push(new THREE.Vector2(radius(t), -0.045 - t * look.body));
+    }
+    const bodyMat = look.gloss
+      ? new THREE.MeshPhysicalMaterial({ color: look.color, roughness: 0.25, clearcoat: 1 })
+      : new THREE.MeshStandardMaterial({ color: look.color, roughness: 0.7 });
+    add(new THREE.LatheGeometry(pts, 14), bodyMat, 0);
+    // 갈대 마디·공작 깃 줄무늬
+    if (look.rings) {
+      for (let t = 0.12; t < 0.95; t += 0.16) {
+        const r = radius(t) + 0.0004;
+        add(new THREE.CylinderGeometry(r, r, 0.003, 12), new THREE.MeshStandardMaterial({ color: look.rings, roughness: 0.7 }), -0.045 - t * look.body);
+      }
+    }
+    // 몸통 위 장식 띠 (전자찌는 전지 뚜껑이라 더 넓다)
+    const bandT = 0.15;
+    const br = radius(bandT) + 0.0005;
+    add(new THREE.CylinderGeometry(br, br, spec.shape === 'electro' ? 0.008 : 0.004, 14),
+      new THREE.MeshStandardMaterial({ color: look.band, metalness: 0.9, roughness: 0.3 }), -0.045 - bandT * look.body);
+    // 찌다리
+    const footTop = -0.045 - look.body;
+    add(new THREE.CylinderGeometry(0.0012, 0.0012, look.foot, 6), new THREE.MeshStandardMaterial({ color: '#d8d0b0' }), footTop - look.foot / 2 + 0.01);
   }
 
   /** tilt 0 서 있음 ~ 1 수면에 누움. yaw: 눕는 방향 */
@@ -291,7 +376,7 @@ export class Float {
     this.group.rotation.set(swingX, 0, swingZ);
     this.body.rotation.set(0, 0, 0);
     // 길어진 찌톱 끝이 줄에 매달린다
-    this.body.position.set(0, -0.125 * Float.SCALE, 0);
+    this.body.position.set(0, -this.top * this.body.scale.y, 0);
   }
 }
 

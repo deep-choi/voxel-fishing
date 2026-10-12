@@ -1,8 +1,10 @@
-import { SPECIES, weightKg, type SpeciesId } from './data';
+import type { SpeciesId } from './data';
 import { ACTIVE_FISHERY } from './fisheries';
 
 // 낚시 대회: 참가비를 내고 정해진 시간 동안 규칙에 맞는 조과로 순위를 다툰다.
-// 멀티플레이를 붙이기 전까지 다른 참가자는 봇이 대신한다. 순위표 구조는 서버 랭킹과 같게 둔다.
+// 봇은 넣지 않는다. 실제 참가자(멀티플레이)가 붙을 때까지 대회는 닫아 둔다 (TOURNAMENTS_OPEN).
+// 순위표 구조는 서버 랭킹과 같게 둔다.
+export const TOURNAMENTS_OPEN = false;
 
 export type Scoring = 'max-cm' | 'total-kg' | 'count';
 export interface TournamentDef {
@@ -19,20 +21,13 @@ export const TOURNAMENTS: TournamentDef[] = [
 ];
 
 export const tournamentAvailable = (def: TournamentDef) => def.target === 'any' || def.target.some(id => ACTIVE_FISHERY.population[id] > 0);
-const BOT_NAMES = ['붕어왕김씨', '새벽조사', '찌맞춤장인', '월척헌터', '낚시하는곰', '터줏대감', '초보조사', '밤낚시러'];
 export interface Entry { name: string; score: number; player?: boolean }
-
-const gauss = () => Math.sqrt(-2 * Math.log(Math.max(Math.random(), 1e-9))) * Math.cos(2 * Math.PI * Math.random());
 
 export class Tournament {
   elapsed = 0;
-  readonly entries: Entry[];
-  private readonly bots: { entry: Entry; skill: number }[];
-  constructor(readonly def: TournamentDef) {
-    const names = [...BOT_NAMES].sort(() => Math.random() - 0.5).slice(0, 7);
-    this.bots = names.map(name => ({ entry: { name, score: 0 }, skill: 0.5 + Math.random() }));
-    this.entries = [{ name: '나', score: 0, player: true }, ...this.bots.map(b => b.entry)];
-  }
+  /** 참가자. 지금은 나뿐이고, 다른 조사는 서버에서 받아 채운다 */
+  readonly entries: Entry[] = [{ name: '나', score: 0, player: true }];
+  constructor(readonly def: TournamentDef) {}
   get duration() { return this.def.minutes * 60; }
   get remaining() { return Math.max(0, this.duration - this.elapsed); }
   get done() { return this.elapsed >= this.duration; }
@@ -53,18 +48,6 @@ export class Tournament {
   update(dt: number) {
     if (this.done) return;
     this.elapsed += dt;
-    const targets = (this.def.target === 'any' ? Object.keys(SPECIES) as SpeciesId[] : this.def.target).filter(id => ACTIVE_FISHERY.population[id] > 0);
-    if (!targets.length) return;
-    const total = targets.reduce((n, id) => n + ACTIVE_FISHERY.population[id] * SPECIES[id].abundance, 0);
-    for (const bot of this.bots) {
-      // 봇은 평균 40초에 한 번 규칙에 맞는 고기를 낚는다
-      if (Math.random() > (dt / 40) * bot.skill) continue;
-      let draw = Math.random() * total;
-      const chosen = targets.find(id => { draw -= ACTIVE_FISHERY.population[id] * SPECIES[id].abundance; return draw < 0; }) ?? targets[targets.length - 1];
-      const sp = SPECIES[chosen];
-      const cm = Math.min(sp.len.max, Math.max(sp.len.min, sp.len.median * ACTIVE_FISHERY.sizeScale * Math.exp(sp.len.sigma * gauss() + (bot.skill - 1) * 0.1)));
-      bot.entry.score = this.next(bot.entry.score, cm, weightKg(sp, cm));
-    }
   }
   scoreText(score: number) {
     return this.def.scoring === 'max-cm' ? `${score.toFixed(1)}cm` : this.def.scoring === 'total-kg' ? `${score.toFixed(2)}kg` : `${score}마리`;

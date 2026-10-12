@@ -40,7 +40,7 @@ export type GameEvent =
   | { type: 'ripple'; x: number; z: number; size: number }
   | { type: 'hookset'; hit: boolean }
   | { type: 'hooked' }
-  | { type: 'lost'; reason: 'break' | 'unhook' }
+  | { type: 'lost'; reason: 'break' | 'unhook' | 'rod' }
   | { type: 'landed' }
   | { type: 'finished'; keep: boolean }
   | { type: 'retrieved' }
@@ -85,7 +85,10 @@ interface Fish {
   pos: THREE.Vector3;
   vel: THREE.Vector3;
   stamina: number;
+  /** 움직임·버티는 힘 (손맛용으로 실제보다 세게) */
   maxPull: number;
+  /** 원줄에 실리는 실제 당김 (kgf). 장력 게이지·줄 터짐·대 부러짐은 이 값으로 */
+  pullKg: number;
   behavior: Behavior;
   bTime: number;
   dir: THREE.Vector3;
@@ -104,11 +107,12 @@ const tmp = new THREE.Vector3();
 const tmp2 = new THREE.Vector3();
 
 /** 찌톱 마디: 10마디, 한 마디 약 2cm (render/tackle.ts의 찌톱과 맞춘다) */
-const FLOAT_NOTCHES = 10;
 const NOTCH_M = 0.02;
 
 /** 고기 힘 배수: 손맛을 위해 실제보다 세게 (작은 붕어도 초릿대가 확실히 휜다) */
 const FISH_POWER = 1.8;
+/** 낚싯대 허용 하중(힘)의 이 배수를 넘기면 부러진다 */
+const ROD_BREAK = 1.25;
 /** 앞치기에서 채비를 놓은 뒤 대 끝 아래로 흔들려 나가는 시간 (초) */
 const CAST_SWING = 0.6;
 
@@ -169,9 +173,9 @@ export class Fishing {
   private restTilt = 0;
   private restDy = 0;
   private bite: Bite | null = null;
+  private biteCooldown = 4;
   private approachRates: EncounterRate[] | null = null;
   private approachAt = 0;
-  private biteCooldown = 4;
   private slackT = 0;
   private prevStretch = 0;
   private lineStrength = 3.6;
@@ -207,8 +211,8 @@ export class Fishing {
     return { ...base, power: base.power * mods.rodPower(base.id) };
   }
   get floatSpec() { return FLOATS.find(f => f.id === this.floatId) ?? FLOATS[0]; }
-  get rigSensitivity() { return rigSensitivity(this.line, this.hook, this.floatSpec); }
   get hook() { return HOOKS.find(h => h.id === this.hookId) ?? HOOKS[0]; }
+  get rigSensitivity() { return rigSensitivity(this.line, this.hook, this.floatSpec); }
   get baitProduct() { const p = baitProduct(this.baitProductId); return p && p.baseBait === this.bait ? p : undefined; }
   get baitName() { return this.baitProduct?.name ?? BAITS[this.bait].name; }
   get chumProduct() { const p = baitProduct(this.chumProductId); return p?.baseBait === 'chum' ? p : undefined; }
@@ -348,8 +352,9 @@ export class Fishing {
     this.phase = 'settling';
     this.settleT = 0;
     const baitDepth = Math.min(this.depthSet, d);
-    this.settleDur = baitDepth / this.floatSpec.sinkSpeed + 0.8;
-    if (this.fastTest) this.settleDur = 0.6;
+    // 찌가 천천히 잠기는 모습이 보이도록 (빠른 확인 모드도 2초 남짓)
+    this.settleDur = baitDepth / this.floatSpec.sinkSpeed + 2.5;
+    if (this.fastTest) this.settleDur = 2.2;
     // 찌 맞춤: 설정 수심이 실제보다 깊으면 남는 줄만큼 찌가 눕는다
     const excess = this.depthSet - d;
     this.restTilt = smoothstep(0.12, 0.5, excess);
@@ -377,18 +382,20 @@ export class Fishing {
     if (this.floatOnLand) return;
 
     this.lineOut = this.float.distanceTo(inp.tip);
-    const wave = (0.004 * Math.sin(this.t * 2.3 + this.float.x) + 0.002 * Math.sin(this.t * 3.7) + 0.0015 * (mods.wave - 1) * Math.sin(this.t * 7.9 + this.float.z)) * mods.wave;
+    // 물결: 찌는 물과 함께 오르내리므로 드러난 찌톱 높이는 거의 그대로다. 몇 mm만 일렁인다
+    // (맑은 날 ±2mm, 비 오는 날 ±7mm 정도. 단찌는 덜, 나노찌는 더)
+    const wave = (0.0012 * Math.sin(this.t * 1.7 + this.float.x) + 0.0006 * Math.sin(this.t * 2.9) + 0.0006 * (mods.wave - 1) * Math.sin(this.t * 5.3 + this.float.z)) * mods.wave * (this.floatSpec.sway ?? 1);
 
     if (this.phase === 'settling') {
       this.settleT += dt;
       const s = Math.min(1, this.settleT / this.settleDur);
-      // 미끼가 가라앉으면서 누워 있던 찌가 일어선다
-      const stand = smoothstep(0.15, 0.9, s);
+      // 봉돌이 가라앉으면서 누워 있던 찌가 일어서고, 이어 찌톱이 한 마디씩 천천히 잠겨 찌맞춤 자리에 멈춘다
+      const stand = smoothstep(0.05, 0.4, s);
+      const u = smoothstep(0.3, 1, s), sink = 1 - (1 - u) * (1 - u);
       this.floatTilt = 1 + (this.restTilt - 1) * stand;
-      this.floatDy = (1 - stand) * 0.06 + (this.restDy + this.trimSink) * stand + wave;
+      this.floatDy = (1 - stand) * 0.06 + (this.restDy + this.trimSink * sink) * stand + wave;
       if (s >= 1) {
         this.phase = 'waiting';
-        if (this.restTilt > 0.6) this.emit({ type: 'toast', text: '찌가 누웠어요 — 설정 수심이 실제보다 깊어요', tone: 'info' });
       }
       return;
     }
@@ -398,24 +405,21 @@ export class Fishing {
     let dx = 0;
     if (this.bite) {
       const b = this.bite;
-      const prevDy = sampleKeys(b.keys, b.t)[0];
       b.t += dt;
       [dy, dx] = sampleKeys(b.keys, b.t);
       const vis = 1 - this.restTilt * 0.8;
       dy *= vis * this.rigSensitivity;
       dy = THREE.MathUtils.clamp(dy, -0.5, 0.34);
-      // 찌가 올라올 때는 물결이 없다. 빨려 들어가거나 끌려갈 때만 수면이 흔들린다
-      const prev = THREE.MathUtils.clamp(prevDy * vis * this.floatSpec.sensitivity, -0.5, 0.34);
-      if (dy < 0 && prev - dy > 0.004) this.emit({ type: 'ripple', x: this.float.x, z: this.float.z, size: 0.3 });
-      if (b.t >= b.end) this.biteEnds(b);
+      // 입질은 물결 없이 찌로만 보인다
+      if (b.t >= b.end) this.biteEnds();
     } else {
       this.biteCooldown -= dt;
       if (this.biteCooldown <= 0) this.rollApproach(dt);
       // 고기가 모이면 찌가 가끔 들썩인다: 집어가 잘 될수록 잦다
       const gather = Math.min(2, this.grounds.attraction(this.float.x, this.float.z));
-      if (this.stirT <= 0 && Math.random() < dt * (0.04 + gather * 0.35)) {
+      if (this.stirT <= 0 && Math.random() < dt * (0.015 + gather * 0.08)) {
         this.stirT = 0.4;
-        this.stirA = rand(0.004, 0.009) * (Math.random() < 0.6 ? -1 : 1);
+        this.stirA = rand(0.002, 0.004) * (Math.random() < 0.6 ? -1 : 1);
       }
     }
     if (this.stirT > 0) {
@@ -430,8 +434,18 @@ export class Fishing {
   }
 
   /** 찌맞춤만큼 찌가 잠기는 깊이 (m, 음수). 누운 찌는 수면에 뜬다 */
+  /** 기다리는 동안 찌가 원래 자리보다 올라온 높이 (m). 변색 전자찌가 쓴다 */
+  get floatRise() {
+    return this.phase === 'waiting' ? this.floatDy - this.restDy - this.trimSink : 0;
+  }
+
+  /** 장력 게이지 100%: 원줄이 끊기거나 낚싯대가 부러지는 값 중 먼저 오는 쪽 (kgf) */
+  get breakLimit() {
+    return Math.min(this.lineStrength, this.rod.power * ROD_BREAK);
+  }
+
   get trimSink() {
-    return -(FLOAT_NOTCHES - this.trimNotches) * NOTCH_M * this.floatSpec.scale * (1 - this.restTilt);
+    return -((this.floatSpec.notches ?? 10) - this.trimNotches) * NOTCH_M * this.floatSpec.scale * (1 - this.restTilt);
   }
 
   /** 들어 올리는 데 버텨야 하는 시간 (초): 무거울수록 길다 */
@@ -491,23 +505,18 @@ export class Fishing {
     this.emit({ type: 'bite' });
   }
 
-  private biteEnds(b: Bite) {
+  private biteEnds() {
+    // 챔질하지 못한 입질은 그대로 끊긴다: 고기가 떠나고 한동안 조용하다 (저절로 걸리지 않는다)
     this.bite = null;
-    this.biteCooldown = this.fastTest ? 0.8 : rand(4, 14);
-    if (b.selfHook) {
-      // 잉어가 미끼를 물고 그대로 달린다: 바늘이 얕게 걸린 채 파이팅
-      this.startFight(b, 'poor');
-      this.emit({ type: 'toast', text: '찌가 쭉 빨려 들어갔어요!', tone: 'info' });
-      return;
-    }
+    this.biteCooldown = this.fastTest ? 6 : rand(15, 35);
   }
 
   /** 챔질은 대를 들어 올리는 동작이다. 고기가 걸리지 않으면 채비가 그대로 물 밖으로 들려 나온다 */
   private doHookset() {
     this.sinceJerk = 0;
     if (this.phase !== 'waiting' && this.phase !== 'settling') return;
-    let failedPenetration = false;
     const b = this.phase === 'waiting' && !this.floatOnLand ? this.bite : null;
+    let failedPenetration = false;
     if (b) {
       const pad = Math.max(-0.22, mods.hookWindow + (this.rigSensitivity - 1) * 0.18);
       const w = this.fastTest ? b.windows[0] : b.windows.find((w) => b.t >= w.t0 - pad && b.t <= w.t1 + pad);
@@ -546,6 +555,8 @@ export class Fishing {
       vel: new THREE.Vector3(),
       stamina: 1,
       maxPull: FISH_POWER * b.sp.power * Math.pow(kg, 0.85) + 0.35,
+      // 돌진 순간 최대 당김 = 몸무게의 1.1~1.4배 (힘센 어종일수록 1.4배 쪽). 220g 붕어 ≈ 0.27kgf, 3kg 잉어 ≈ 4kgf
+      pullKg: kg * (1.1 + 0.3 * THREE.MathUtils.clamp((b.sp.power - 1.4) / 1, 0, 1)) + 0.02,
       behavior: 'run',
       bTime: rand(1.5, 3),
       dir: this.awayDir(rand(-1, 1)),
@@ -554,7 +565,7 @@ export class Fishing {
       splashT: 0,
     };
     this.liftT = 0;
-    this.lineStrength = this.line.strength * rand(0.95, 1.05);
+    this.lineStrength = this.line.strength;
     this.slackT = 0;
     this.prevStretch = NaN;
     // 챔질 직후: 줄은 고기까지 거의 팽팽
@@ -653,10 +664,13 @@ export class Fishing {
     const resistance = muscle * (0.2 + f.stamina * 0.8) * factor;
     const pulling = inp.primary && !inp.lift && inp.rodDir.y > 0.03;
     const pulse = f.behavior === 'shake' ? 1 + Math.sin(this.fightTime * 23) * 0.35 : 1;
-    const load = (resistance * pulse + (pulling ? this.rod.power * 0.3 : 0.05)) * (inp.lift ? 0.45 : 1);
-    // 빠른 모드는 실패를 완화하지만 돌진·휴식에 따라 실제 장력은 계속 달라진다.
-    const target = Math.min(this.line.strength * 0.92, load);
-    this.tension += (target - this.tension) * (1 - Math.exp(-dt * 14));
+    // 원줄 장력 (kgf): 고기의 실제 당김. 대를 세워 버티면 그대로 실리고, 숙이면 대가 받아 줄어든다. 최대는 pullKg
+    const fishPull = f.pullKg * (0.25 + 0.75 * f.stamina) * factor * pulse;
+    const load = (fishPull * (pulling ? 1 : 0.85) + 0.02) * (inp.lift ? 0.6 : 1);
+    this.tension += (load - this.tension) * (1 - Math.exp(-dt * 14));
+    if (this.tension > this.lineStrength) return this.lose('break');
+    // 대를 세운 채 허용 하중을 크게 넘기면 낚싯대가 부러진다 (숙이면 줄이 직접 받는다)
+    if (!inp.lift && this.tension > this.rod.power * ROD_BREAK) return this.lose('rod');
     tmp.set(this.origin.x - f.pos.x, 0, this.origin.z - f.pos.z).normalize();
     const leverage = this.rod.power * (0.8 + Math.max(0, inp.rodDir.y) * 0.8);
     const gain = pulling ? THREE.MathUtils.clamp((leverage - resistance) / this.rod.power, 0.06, 1.4) * 1.9 : 0;
@@ -701,6 +715,7 @@ export class Fishing {
     this.tension = T;
 
     if (T > this.lineStrength) return this.lose('break');
+    if (!inp.lift && T > this.rod.power * ROD_BREAK) return this.lose('rod');
     if (T > f.hookHold) return this.lose('unhook');
     if (T < 0.03) this.slackT += h;
     else this.slackT = Math.max(0, this.slackT - h * 2);
@@ -713,7 +728,7 @@ export class Fishing {
     f.bTime -= h;
     if (f.bTime <= 0) this.pickBehavior(f);
     const factor = { run: 1, shake: 0.55, dive: 0.8, rest: 0.12 }[f.behavior];
-    let pull = f.maxPull * (0.22 + 0.78 * f.stamina) * factor;
+    let pull = f.pullKg * (0.22 + 0.78 * f.stamina) * factor;
     if (f.behavior === 'shake') pull *= 1 + 0.7 * Math.sin(this.t * 32);
     const wd = waterDepth(f.pos.x, f.pos.z);
     const wantY = f.behavior === 'dive' ? -wd + 0.2 : f.stamina < 0.3 ? -0.1 : -Math.min(wd * 0.6, 1.5);
@@ -723,7 +738,7 @@ export class Fishing {
     const toTip = tmp.subVectors(tip, f.pos).normalize();
     force.addScaledVector(toTip, T * G);
     // 물의 저항
-    const cd = (f.maxPull * G) / (f.sp.speed * f.sp.speed);
+    const cd = (f.pullKg * G) / (f.sp.speed * f.sp.speed);
     const sp = f.vel.length();
     force.addScaledVector(f.vel, -cd * sp - 0.6);
     const m = f.kg * 1.4 + 0.05;
@@ -745,16 +760,16 @@ export class Fishing {
     if (f.pos.y >= -0.04) f.vel.y = Math.min(f.vel.y, 0);
 
     // 힘쓸수록, 줄이 팽팽할수록 지친다
-    const effort = (factor * 0.6 + 0.25) * (0.5 + 0.9 * Math.min(1.5, T / f.maxPull)) * (this.liftHeld ? 1.25 : 1);
+    const effort = (factor * 0.6 + 0.25) * (0.5 + 0.9 * Math.min(1.5, T / f.pullKg)) * (this.liftHeld ? 1.25 : 1);
     const stamSec = f.sp.stamina[0] + f.sp.stamina[1] * f.kg;
     f.stamina = THREE.MathUtils.clamp(f.stamina - (h * effort) / stamSec + (f.behavior === 'rest' ? h * 0.006 : 0), 0, 1);
   }
 
-  private lose(reason: 'break' | 'unhook', quiet = false) {
+  private lose(reason: 'break' | 'unhook' | 'rod', quiet = false) {
     const f = this.fish!;
     this.emit({ type: 'lost', reason });
     const name = f.kg > 1 ? '대물을' : '고기를';
-    const text = reason === 'break' ? `줄이 터졌어요! ${name} 놓쳤어요 — 버틸 땐 대를 숙여 주세요` : `바늘이 빠졌어요. ${name} 놓쳤어요`;
+    const text = reason === 'break' ? `줄이 터졌어요! ${name} 놓쳤어요` : reason === 'rod' ? `낚싯대가 부러졌어요! ${name} 놓쳤어요` : `바늘이 빠졌어요. ${name} 놓쳤어요`;
     if (!quiet) this.emit({ type: 'toast', text, tone: 'bad' });
     this.fish = null;
     this.tension = 0;

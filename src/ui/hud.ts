@@ -31,7 +31,10 @@ export interface HudHandlers {
   travel(id: number): void;
   fishery(id: string): void;
   online(action: string, value?: string): void;
-  rig(kind: string, id: string): void;
+  /** 채비 바꾸기. target: 자리 id 또는 'default'(새로 꺼낼 대) */
+  rig(kind: string, id: string, target: string): void;
+  /** 채비 창에서 고른 대의 낚시 상태 */
+  rigGame(target: string): Fishing;
   buy(kind: ShopKind, id: string): void;
   sell(): void;
   /** 어시장에서 한 마리 판매 */
@@ -74,9 +77,8 @@ export class Hud {
   private activeRod: string | null = null;
   private rodSlots: P.RodStatus[] = [];
   private tournament: Tournament | null = null;
-  private forecastAt = 0;
   private online = emptyOnlineState();
-  private readonly ui: P.UiState = { inventoryTab: 'bag', invSelected: null, shopTab: 'bait', rigStep: 'rod', recordSpecies: 'crucian', weekly: false, questTab: 'daily', resetArmed: false, onlineSpecies: 'crucian', onlineScope: 'all', nicknameDraft: '', chatDraft: '' };
+  private readonly ui: P.UiState = { inventoryTab: 'all', invSelected: null, shopTab: 'bait', rigStep: 'rod', rigTarget: null, recordSpecies: 'crucian', weekly: false, questTab: 'daily', resetArmed: false, onlineSpecies: 'crucian', onlineScope: 'all', nicknameDraft: '', chatDraft: '' };
 
   constructor(
     private readonly root: HTMLElement,
@@ -90,28 +92,14 @@ export class Hud {
 <div class="night-tint" data-ref="night"></div>
 <div class="start" data-ref="start">
   <div class="start-card">
-    <p class="kicker">${ACTIVE_FISHERY.name} · 민물 찌낚시</p>
+    <p class="kicker">민물 찌낚시</p>
     <h1>좌대 낚시</h1>
-    <button class="btn small" data-act="menu" data-id="account" data-ref="onlineEntry">Google 로그인 · 닉네임</button>
-    <p class="lead">Google 로그인 후 버들못에서 낚시를 시작하세요.</p>
-    ${P.fisheryCards()}
-    <ul class="keys keys-desk">
-      <li><kbd>마우스</kbd> 둘러보기 · <kbd>WASD</kbd> 걷기 · <kbd>M</kbd> 좌대 이동</li>
-      <li><kbd>E</kbd> 대 꺼내 들기 / 거치 / 다시 들기 · <kbd>F</kbd> 회수해 가방에 넣기</li>
-      <li><kbd>좌클릭 길게 → 놓기</kbd> 앞치기 · <kbd>R</kbd> 채비 걷기</li>
-      <li><kbd>좌클릭 / 우클릭</kbd> 또는 <kbd>Space</kbd> 챔질</li>
-      <li>걸면: <kbd>좌클릭 누르기</kbd> 대 세우기 · <kbd>우클릭 누르기</kbd> 대 숙이기</li>
-      <li><kbd>1</kbd>~<kbd>3</kbd> 낚싯대 · <kbd>4</kbd> 집어</li>
-      <li><kbd>I</kbd> 가방 <kbd>C</kbd> 채비 <kbd>B</kbd> 상점 <kbd>Q</kbd> 의뢰 <kbd>T</kbd> 대회 <kbd>K</kbd> 기술 <kbd>O</kbd> 설정</li>
-    </ul>
-    <ul class="keys keys-touch">
-      <li>왼쪽 아래 엄지로 걷기 · 화면을 끌어 둘러보기</li>
-      <li>오른쪽 아래 큰 버튼: 던지기 → 챔질 → 세우기로 바뀌어요</li>
-      <li>아래 칸을 눌러 낚싯대 바꾸기 · 오른쪽 위 ☰ 메뉴</li>
-    </ul>
+    <p class="lead">구글 계정으로 로그인하면 ${ACTIVE_FISHERY.name}에서 바로 시작해요.</p>
     <button class="btn primary" data-act="start" data-ref="entry" disabled>계정 확인 중…</button>
     <p class="admission-note" data-ref="admission" role="alert" hidden></p>
-    <p class="tip">시간·날씨에 따라 어종별 입질이 달라져요</p>
+    <p class="admission-note" data-ref="loginError" role="alert" hidden></p>
+    <button class="btn small start-account" data-act="menu" data-id="account" data-ref="onlineEntry" hidden>계정 · 닉네임</button>
+    <p class="tip">조작법은 게임 안 메뉴(☰ · Esc)에서 볼 수 있어요</p>
   </div>
 </div>
 <div class="rotate-note"><b>화면을 가로로 돌려 주세요</b><small>낚시는 가로 화면에서 즐길 수 있어요</small></div>
@@ -127,8 +115,7 @@ export class Hud {
 <div class="toasts" data-ref="toasts"></div>
 <div class="power" data-ref="power"><i></i></div>
 <div class="fight" data-ref="fight">
-  <div class="meter" title="원줄 장력"><i data-ref="tfill"></i></div>
-  <div class="meter rod" title="낚싯대 부하"><i data-ref="rfill"></i></div>
+  <div class="meter" title="원줄 장력 · 100%면 끊어진다"><i data-ref="tfill"></i></div>
   <div class="fight-feel" data-ref="feel"></div>
 </div>
 <div class="prompt" data-ref="interaction" hidden></div>
@@ -191,9 +178,10 @@ export class Hud {
       case 'map':
         if (this.started) this.h.menu('platforms');
         break;
-      case 'bait': this.h.rig('bait', id); rerender(); break;
-      case 'line': this.h.rig('line', id); rerender(); break;
-      case 'rig': this.h.rig(kind, id); rerender(); break;
+      case 'bait': this.h.rig('bait', id, this.rigTarget()); rerender(); break;
+      case 'line': this.h.rig('line', id, this.rigTarget()); rerender(); break;
+      case 'rig': this.h.rig(kind, id, this.rigTarget()); rerender(); break;
+      case 'rig-target': this.ui.rigTarget = id; rerender(); break;
       case 'rig-step': this.ui.rigStep = id as P.RigStep; rerender(); break;
       case 'buy': this.h.buy(kind as ShopKind, id); rerender(); break;
       case 'shop-tab': this.ui.shopTab = id as P.ShopTab; rerender(); break;
@@ -213,7 +201,7 @@ export class Hud {
       case 'quest-tab': this.ui.questTab = id as 'daily' | 'achieve'; rerender(); break;
       case 'join': this.h.join(id); rerender(); break;
       case 'quit': this.h.quit(); rerender(); break;
-      case 'inventory-tab': this.ui.inventoryTab = id as 'bag' | 'craft'; rerender(); break;
+      case 'inventory-tab': this.ui.inventoryTab = id as P.InvTab; rerender(); break;
       case 'inv-select': this.ui.invSelected = id; rerender(); break;
       case 'menu': if (id === 'chat') this.focusChat(); else this.h.menu(id as MenuModal); break;
       case 'record-species': this.ui.recordSpecies = id as SpeciesId; rerender(); break;
@@ -232,8 +220,7 @@ export class Hud {
     if (t.dataset.act === 'chat-draft') this.ui.chatDraft = t.value;
     const out = t.closest('.field')?.querySelector('output');
     if (t.dataset.act === 'depth') {
-      this.h.rig('depth', t.value);
-      this.updateForecast();
+      this.h.rig('depth', t.value, this.rigTarget());
       if (out) out.textContent = `${Number(t.value).toFixed(1)}m`;
     }
     if (t.dataset.act === 'setting-range') {
@@ -250,6 +237,7 @@ export class Hud {
     if (!this.started) this.el.start.hidden = true;
     this.syncOnlineView();
     this.ui.resetArmed = false;
+    if (m === 'setup') this.ui.rigTarget = null;
     this.renderModal();
   }
 
@@ -284,7 +272,11 @@ export class Hud {
   setOnline(state: OnlineState) {
     if (this.online.uid !== state.uid) { this.ui.nicknameDraft = ''; this.ui.chatDraft = ''; }
     this.online = { ...state };
-    this.el.onlineEntry.textContent = state.nickname ? `${state.nickname} · 계정` : 'Google 로그인 · 닉네임';
+    this.el.onlineEntry.textContent = state.nickname ? `${state.nickname} · 계정` : '계정 · 닉네임';
+    // 로그인한 뒤에만 계정 버튼을 보이고, 로그인 실패 이유는 시작 화면에 바로 띄운다
+    this.el.onlineEntry.hidden = !state.uid;
+    this.el.loginError.textContent = state.error;
+    this.el.loginError.hidden = !state.error;
     (this.el.entry as HTMLButtonElement).disabled = !state.ready || state.busy || state.entering;
     this.el.entry.textContent = !state.ready ? '계정 확인 중…' : state.entering ? '입장 확인 중…' : state.busy ? '연결 중…' : state.uid ? state.nickname ? '버들못 입장 →' : '닉네임 설정 후 입장' : 'Google 로그인하고 입장 →';
     this.el.admission.textContent = state.admissionError;
@@ -376,11 +368,19 @@ export class Hud {
   setRodSlots(slots: P.RodStatus[]) {
     const changed = JSON.stringify(slots) !== JSON.stringify(this.rodSlots);
     this.rodSlots = slots;
-    if (changed && this.modal === 'inventory') this.renderModal();
+    if (changed && (this.modal === 'inventory' || this.modal === 'setup')) this.renderModal();
+  }
+
+  /** 채비 창의 대: 고른 대가 없거나 사라졌으면 손에 든 대 → 새로 꺼낼 대 → 첫 대 */
+  private rigTarget() {
+    const t = this.ui.rigTarget, free = this.rodSlots.length < MAX_DEPLOYED_RODS;
+    if (t && (t === 'default' ? free : this.rodSlots.some(r => r.slotId === t))) return t;
+    return this.rodSlots.find(r => r.active)?.slotId ?? (free ? 'default' : this.rodSlots[0]?.slotId ?? 'default');
   }
 
   private ctx(): P.PanelCtx {
-    return { player: this.player, game: this.game, env: this.env, tournament: this.tournament, rodSlots: this.rodSlots, platforms: this.platforms,
+    const rigTarget = this.rigTarget();
+    return { player: this.player, game: this.game, rigTarget, rigGame: this.h.rigGame(rigTarget), env: this.env, tournament: this.tournament, rodSlots: this.rodSlots, platforms: this.platforms,
       currentPlatform: this.currentPlatform, activeRod: this.activeRod, ui: this.ui, settings: this.settings, online: this.online };
   }
 
@@ -393,14 +393,10 @@ export class Hud {
       records: P.recordsPanel, platforms: P.platformsPanel, quests: P.questsPanel, skills: P.skillsPanel, tournament: P.tournamentPanel,
       settings: P.settingsPanel, pause: P.pausePanel, account: P.accountPanel, onlineRanking: P.onlineRankingPanel,
     };
-    // 터치 화면에서는 패널이 화면을 꽉 채우므로 오른쪽 위에 닫기 버튼을 따로 둔다
-    box.innerHTML = this.modal === 'none' ? '' : `${panels[this.modal](c)}<button class="sheet-x" data-act="resume" aria-label="닫기"><i></i><i></i></button>`;
+    box.innerHTML = this.modal === 'none' ? '' : panels[this.modal](c);
+    // 모든 창은 맨 오른쪽 위에 닫기(✕). 스크롤해도 따라 내려온다
+    box.querySelector('.panel')?.insertAdjacentHTML('afterbegin', '<div class="panel-x"><button data-act="resume" title="닫기 (Esc)" aria-label="닫기"><i></i><i></i></button></div>');
     this.updateCounts(); this.updateChat();
-  }
-  private updateForecast() {
-    if (this.modal !== 'setup') return;
-    const node = this.el.modal.querySelector('.encounter-forecast');
-    if (node) node.outerHTML = P.encounterForecast(this.game);
   }
 
   showCatch(c: Catch | null) {
@@ -478,8 +474,6 @@ export class Hud {
 
   update(pipOn: boolean) {
     const g = this.game, env = this.env;
-    const now = performance.now();
-    if (this.modal === 'setup' && now - this.forecastAt >= 1000) { this.forecastAt = now; this.updateForecast(); }
     this.set('place', this.el.place, this.player.saveFailed ? '<span class="save-error">저장 공간 부족 · 이번 진행은 저장되지 않았어요</span>' : '');
     // 살림망 게이지: 마릿수 / 한도, 고리는 찬 만큼
     const p = this.player, cap = p.keepnetSpec.capacity, n = p.keepnet.length, fill = Math.min(1, n / cap);
@@ -499,17 +493,16 @@ export class Hud {
     const fighting = g.phase === 'fighting';
     this.el.fight.classList.toggle('on', fighting);
     if (fighting) {
-      const ls = g.line.strength;
-      const ratio = Math.min(1, g.tension / ls);
-      const rod = Math.min(1, g.tension / g.rod.power);
+      // 100% = 줄이 끊기거나 대가 부러진다
+      const ratio = Math.min(1, g.tension / g.breakLimit);
       const color = (r: number) => r < 0.5 ? '#7fd17a' : r < 0.8 ? '#f2c14e' : '#ef5b4b';
       this.el.tfill.style.width = `${ratio * 100}%`;
       this.el.tfill.style.background = color(ratio);
-      this.el.rfill.style.width = `${rod * 100}%`;
-      this.el.rfill.style.background = color(rod);
+      // 줄이 위험하면 막대가 떨리며 붉게 빛난다
+      this.el.fight.classList.toggle('danger', ratio > 0.8);
       // 위험할 때만 한 줄로 알려 준다
       const f = g.fish;
-      this.el.feel.textContent = !f ? '' : g.liftProgress > 0 ? `버티며 들어 올리는 중 ${Math.round(g.liftProgress * 100)}%` : ratio > 0.8 ? '줄이 끊어질 것 같아요 · 우클릭으로 대 숙이기' : f.kg > this.player.netSpec.maxKg ? '뜰채보다 무거워요' : f.stamina < 0.3 ? '힘이 빠졌어요 · 끌어오세요' : '';
+      this.el.feel.textContent = !f ? '' : g.liftProgress > 0 ? `들어 올리는 중 ${Math.round(g.liftProgress * 100)}%` : '';
     }
   }
 }

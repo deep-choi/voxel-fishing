@@ -1,3 +1,4 @@
+import { FLOATS, type FloatSpec } from '../game/data';
 import { artSize, cellAt, cellColor, type FishLook } from '../game/fishArt';
 
 const svg = (body: string, box = '0 0 16 16') => `<svg viewBox="${box}" aria-hidden="true" focusable="false" shape-rendering="crispEdges">${body}</svg>`;
@@ -45,11 +46,34 @@ const icons: Record<string, string> = {
 const ROD_GRIP: Record<string, string> = { light: '#7a8b4a', long: '#5a7fb5', power: '#2f3b2f', carbon: '#2a2a33', legend: '#b5862e', memphis: '#5a6951', grand: '#2d796b', gold: '#d1a94d', mugung: '#824b74' };
 export function itemIcon(id: string, variant?: string): string {
   if (id === 'rod' && variant && ROD_GRIP[variant]) return svg(icons.rod.replace('#3a4542', ROD_GRIP[variant]));
+  const fl = id === 'float' && variant ? FLOATS.find(f => f.id === variant) : undefined;
+  if (fl) return floatIcon(fl);
   if (icons[id]) return svg(icons[id]);
   const colors: Record<string, string> = { paste: '#b39157', gluten: '#e2d9b4', pellet: '#876043', chum: '#9a834b',
     bran: '#ac925a', cornmeal: '#d8b857', attractor: '#c08c77', fishmeal: '#987353', glutenpowder: '#ece0b8' };
   const color = colors[id] ?? '#aaa17f';
   return svg(rect(3, 3, 10, 11, '#c4b990') + rect(4, 5, 8, 8, color) + rect(5, 6, 2, 2, '#f0e0b0') + rect(9, 10, 2, 2, '#5c5138') + rect(5, 1, 6, 2, '#6e8050'));
+}
+
+/** 찌 아이콘: 찌톱 길이·몸통 모양·불빛이 종류마다 다르다 (3D 찌와 같은 특징) */
+const FLOAT_ICON: Record<string, [w: number, h: number, color: string, ring?: string]> = {
+  stick: [4, 5, '#7a2a1c'], short: [4, 4, '#2f5a36'], slim: [2, 6, '#2c3e56'], egg: [6, 5, '#8a3420'],
+  long: [4, 6, '#4b2f63'], reed: [3, 6, '#c9b27a', '#8d7240'], peacock: [2, 7, '#ddd3bb', '#6b5a3a'], electro: [4, 5, '#2a2a2a'],
+};
+function floatIcon(f: FloatSpec): string {
+  const [w, h, color, ring] = FLOAT_ICON[f.shape ?? 'stick'];
+  const top = Math.max(2, Math.round(((f.notches ?? 10) / 15) * 6));
+  const x = 8 - Math.ceil(w / 2);
+  let y = f.light === 'chemi' ? 2 : 1;
+  let out = f.light === 'chemi' ? rect(7, 0, 2, 2, '#c8ff6a') : '';
+  for (let i = 0; i < top; i++) out += rect(7, y + i, 2, 1, f.light === 'electro' && i < 2 ? (f.shift && i === 0 ? '#4dff7a' : '#ff4a3a') : ['#e86c42', '#edda77', '#5cc65a'][i % 3]);
+  y += top;
+  out += rect(x, y, w, h, color);
+  if (ring) for (let i = 1; i < h; i += 2) out += rect(x, y + i, w, 1, ring);
+  if (f.shape === 'electro') out += rect(x, y + 1, w, 1, '#c0c0c0');
+  y += h;
+  out += rect(7, y, 2, Math.max(1, 15 - y), '#e5d8b7');
+  return svg(out);
 }
 
 /** 도감 아이콘도 3D 물고기와 같은 단면·색·무늬를 사용한다. */

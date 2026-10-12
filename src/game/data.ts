@@ -88,14 +88,42 @@ export const RODS: RodSpec[] = [
   { id: 'carbon', name: '바낙스 IGNIS V2', length: 6.84, line: 7.8, power: 4.0, flex: 1.5, price: 2400, level: 7, rarity: 'epic', desc: '반발력이 좋아 잉어·향어를 빨리 띄운다' },
   { id: 'legend', name: '아피스 천년지기 프리미엄', length: 7.92, line: 10.5, power: 6.5, flex: 2.0, price: 6800, level: 10, rarity: 'legendary', desc: '긴 대로 깊은 포인트와 대물을 노린다' },
 ];
-export interface FloatSpec extends GearMeta { id: string; name: string; sensitivity: number; sinkSpeed: number; scale: number; price: number; desc: string; glow?: number }
+/** 찌 몸통 모양 (render/tackle.ts·아이콘이 같은 값을 쓴다) */
+export type FloatShape = 'stick' | 'short' | 'slim' | 'egg' | 'long' | 'reed' | 'peacock' | 'electro';
+export interface FloatSpec extends GearMeta {
+  id: string; name: string; sensitivity: number; sinkSpeed: number; scale: number; price: number; desc: string;
+  /** 밤 밝기 (케미·전자찌) */
+  glow?: number;
+  shape?: FloatShape;
+  /** 찌톱 마디 수 (한 마디 약 2cm). 길수록 올림이 길게 보인다. 기본 10 */
+  notches?: number;
+  /** 물결·바람에 흔들리는 정도 배수. 짧고 굵을수록 작다. 기본 1 */
+  sway?: number;
+  /** 불빛: 케미라이트를 꽂는 찌 / 전지로 켜는 전자찌 */
+  light?: 'chemi' | 'electro';
+  glowColor?: string;
+  /** 변색 전자찌: 찌가 올라오면 바뀌는 색 */
+  shift?: string;
+}
 export const FLOATS: FloatSpec[] = [
-  { id: 'basic', name: '막대찌', sensitivity: 1, sinkSpeed: 0.4, scale: 1, price: 0, level: 1, rarity: 'common', desc: '균형 잡힌 기본 찌' },
-  { id: 'sensitive', name: '예민한 저부력찌', sensitivity: 1.4, sinkSpeed: 0.3, scale: 0.8, price: 220, level: 2, rarity: 'uncommon', desc: '작은 입질도 크게 보이지만 천천히 가라앉는다' },
-  { id: 'deep', name: '깊은 수심용 찌', sensitivity: 0.8, sinkSpeed: 0.7, scale: 1.2, price: 320, level: 4, rarity: 'uncommon', desc: '빠르게 자리 잡고 깊은 곳을 공략한다' },
-  { id: 'night', name: '케미 야광찌', sensitivity: 1.1, sinkSpeed: 0.45, scale: 1, price: 420, level: 3, rarity: 'rare', glow: 1.6, desc: '케미라이트를 꽂아 밤에도 찌톱이 보인다' },
-  { id: 'electro', name: '고감도 전자찌', sensitivity: 1.5, sinkSpeed: 0.4, scale: 1, price: 1200, level: 6, rarity: 'epic', glow: 3, desc: '밤에 밝게 빛나고 작은 입질도 크게 보인다' },
+  { id: 'basic', name: '막대찌', shape: 'stick', sensitivity: 1, sinkSpeed: 0.4, scale: 1, price: 0, level: 1, rarity: 'common', desc: '균형 잡힌 기본 오동나무 막대찌' },
+  { id: 'short', name: '단찌', shape: 'short', notches: 6, sway: 0.55, sensitivity: 0.9, sinkSpeed: 0.6, scale: 0.9, price: 150, level: 1, rarity: 'common', desc: '찌톱이 짧고 몸통이 굵어 바람·물결에 덜 흔들린다. 얕은 연안용' },
+  { id: 'sensitive', name: '나노 저부력찌', shape: 'slim', notches: 12, sway: 1.25, sensitivity: 1.4, sinkSpeed: 0.3, scale: 0.8, price: 220, level: 2, rarity: 'uncommon', desc: '가늘고 가벼워 작은 입질도 크게 보이지만 천천히 서고 물결을 탄다' },
+  { id: 'reed', name: '갈대찌', shape: 'reed', notches: 11, sensitivity: 1.25, sinkSpeed: 0.42, scale: 1, price: 260, level: 2, rarity: 'uncommon', desc: '가볍고 부력 좋은 갈대 몸통. 올림이 시원하게 보인다' },
+  { id: 'deep', name: '대물 올림찌', shape: 'egg', sway: 0.8, sensitivity: 0.8, sinkSpeed: 0.7, scale: 1.2, price: 320, level: 4, rarity: 'uncommon', desc: '몸통이 굵어 빨리 자리 잡고 깊은 곳·무거운 채비를 버틴다' },
+  { id: 'long', name: '장찌', shape: 'long', notches: 15, sway: 1.1, sensitivity: 1.2, sinkSpeed: 0.5, scale: 1.1, price: 380, level: 3, rarity: 'uncommon', desc: '찌톱이 길어 쭈욱 올라오는 본신이 길게 보인다. 깊은 수심·먼 거리' },
+  { id: 'peacock', name: '공작찌', shape: 'peacock', notches: 12, sway: 0.9, sensitivity: 1.35, sinkSpeed: 0.45, scale: 1, price: 680, level: 4, rarity: 'rare', desc: '공작 깃 몸통이라 가볍고 곧게 선다. 예민하면서도 덜 흔들린다' },
+  { id: 'night', name: '케미 막대찌', shape: 'stick', light: 'chemi', sensitivity: 1.1, sinkSpeed: 0.45, scale: 1, price: 420, level: 3, rarity: 'rare', glow: 1.6, desc: '찌톱 끝에 케미라이트를 꽂아 밤에도 연두빛으로 보인다' },
+  { id: 'chemiLong', name: '케미 장찌', shape: 'long', light: 'chemi', notches: 15, sway: 1.1, sensitivity: 1.25, sinkSpeed: 0.5, scale: 1.1, price: 720, level: 5, rarity: 'rare', glow: 1.8, desc: '긴 찌톱 끝 케미가 밤에 길게 솟아오른다' },
+  { id: 'electro', name: '고감도 전자찌', shape: 'electro', light: 'electro', notches: 9, sensitivity: 1.5, sinkSpeed: 0.4, scale: 1, price: 1200, level: 6, rarity: 'epic', glow: 3, desc: '전지로 찌톱 LED가 밝게 빛나고 작은 입질도 크게 보인다' },
+  { id: 'electroShift', name: '변색 전자찌', shape: 'electro', light: 'electro', notches: 12, sensitivity: 1.5, sinkSpeed: 0.45, scale: 1.05, price: 2600, level: 8, rarity: 'legendary', glow: 3, glowColor: '#ff4a3a', shift: '#4dff7a', desc: '찌가 올라오면 LED가 빨강에서 초록으로 바뀐다' },
 ];
+/** 찌 특성 한 줄 (가방·상점·채비 화면) */
+export function floatTraits(f: FloatSpec) {
+  const sway = f.sway ?? 1;
+  return [`찌톱 ${f.notches ?? 10}마디`, `예민함 ${f.sensitivity}`, sway < 0.95 ? '물결에 강함' : sway > 1.05 ? '물결에 약함' : '',
+    f.light === 'electro' ? (f.shift ? '변색 LED' : 'LED 발광') : f.light === 'chemi' ? '케미 발광' : ''].filter(Boolean).join(' · ');
+}
 export interface HookSpec extends GearMeta { id: string; name: string; hold: number; attraction: number; price: number; desc: string }
 export const HOOKS: HookSpec[] = [
   { id: 'small', name: '오너 OH 갈색 헤라 개량스레 5호', hold: 0.9, attraction: 1.1, price: 0, level: 1, rarity: 'common', desc: '붕어와 작은 물고기에게 유리' },
@@ -126,7 +154,7 @@ HOOKS.push(
   { id: 'ise9', name: '가마카츠 이세니 9호', hold: 1.4, attraction: 0.9, price: 360, level: 3, rarity: 'uncommon', desc: '옥수수·어분 채비로 잉어를 노린다' },
   { id: 'owner7', name: '오너 OH 갈색 헤라 개량스레 7호', hold: 1.25, attraction: 1.08, price: 340, level: 3, rarity: 'rare', desc: '글루텐 떡밥을 사용하는 민물 찌낚시용' },
 );
-FLOATS.push({ id: 'ha566', name: '해동 HA-566 내림찌', sensitivity: 1.3, sinkSpeed: 0.55, scale: 0.85, price: 280, level: 2, rarity: 'uncommon', desc: '내림 붕어낚시 채비세트의 찌를 게임에서 단독 장착' });
+FLOATS.push({ id: 'ha566', name: '해동 HA-566 내림찌', shape: 'slim', notches: 13, sway: 1.2, sensitivity: 1.3, sinkSpeed: 0.55, scale: 0.85, price: 280, level: 2, rarity: 'uncommon', desc: '내림 붕어낚시 채비세트의 찌를 게임에서 단독 장착' });
 
 export const MAX_DEPLOYED_RODS = 3;
 export const INGREDIENTS = [
