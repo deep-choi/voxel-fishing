@@ -40,6 +40,8 @@ export interface LineSpec extends GearMeta {
   strength: number;
   /** 줄이 굵을수록 예민한 물고기가 덜 문다 (어종별 shy와 곱해짐) */
   visibility: number;
+  /** 게임 채비 계산용 실제 굵기(mm). 저장된 원줄 순서와 별도로 관리한다. */
+  diameterMm?: number;
   price: number;
   desc: string;
 }
@@ -124,7 +126,7 @@ export function floatTraits(f: FloatSpec) {
   return [`찌톱 ${f.notches ?? 10}마디`, `예민함 ${f.sensitivity}`, sway < 0.95 ? '물결에 강함' : sway > 1.05 ? '물결에 약함' : '',
     f.light === 'electro' ? (f.shift ? '변색 LED' : 'LED 발광') : f.light === 'chemi' ? '케미 발광' : ''].filter(Boolean).join(' · ');
 }
-export interface HookSpec extends GearMeta { id: string; name: string; hold: number; attraction: number; price: number; desc: string }
+export interface HookSpec extends GearMeta { id: string; name: string; hold: number; attraction: number; price: number; desc: string; gapMm?: number }
 export const HOOKS: HookSpec[] = [
   { id: 'small', name: '오너 OH 갈색 헤라 개량스레 5호', hold: 0.9, attraction: 1.1, price: 0, level: 1, rarity: 'common', desc: '붕어와 작은 물고기에게 유리' },
   { id: 'medium', name: '가마카츠 이세니 7호', hold: 1.15, attraction: 1, price: 160, level: 2, rarity: 'common', desc: '붕어와 잉어를 함께 노린다' },
@@ -157,6 +159,36 @@ HOOKS.push(
 FLOATS.push({ id: 'ha566', name: '해동 HA-566 내림찌', shape: 'slim', notches: 13, sway: 1.2, sensitivity: 1.3, sinkSpeed: 0.55, scale: 0.85, price: 280, level: 2, rarity: 'uncommon', desc: '내림 붕어낚시 채비세트의 찌를 게임에서 단독 장착' });
 
 export const MAX_DEPLOYED_RODS = 3;
+// 버들못 자체 게임 장비. 실제 제조사 제품명·성능을 뜻하지 않는다.
+// 품질이 높아도 섬세한 채비는 약하고, 대물 채비는 굵고 둔하다.
+RODS.push(
+  { id: 'willow-soft', name: '버들못 연안 연질대', length: 4.5, line: 4.1, power: 2.3, flex: 1.65, price: 340, level: 2, rarity: 'uncommon', desc: '짧은 거리의 붕어용. 깊게 휘어 돌진을 받지만 제압력과 사거리가 낮다' },
+  { id: 'willow-finesse', name: '버들못 세류 정밀대', length: 5.4, line: 5.1, power: 2.8, flex: 1.75, price: 1450, level: 5, rarity: 'rare', desc: '가느다란 원줄에 맞춘 연질 붕어대. 대물 제압보다 충격 흡수에 집중' },
+  { id: 'willow-guard', name: '버들못 수초 강공대', length: 5.76, line: 5.5, power: 5.8, flex: 1.1, price: 2900, level: 7, rarity: 'epic', desc: '짧고 단단한 대물용. 강하게 당기지만 가는 원줄의 충격 완충은 적다' },
+  { id: 'willow-master', name: '버들못 명인 연질대', length: 6.12, line: 5.9, power: 3.4, flex: 2.25, price: 5900, level: 10, rarity: 'legendary', desc: '허리까지 휘는 고급 붕어용. 대물대보다 약하고 짧지만 충격을 길게 받아 준다' },
+);
+Object.assign(ROD_ACTION, { 'willow-soft': 0.3, 'willow-finesse': 0.25, 'willow-guard': 0.88, 'willow-master': 0.18 });
+LINES.push(
+  { id: 'willow-entry', name: '버들못 실속 원줄 2.5호', diameterMm: 0.26, strength: 3.9, visibility: 0.22, price: 100, level: 1, rarity: 'common', desc: '저렴한 중간 굵기. 예민한 붕어보다 일반 낚시에 알맞다' },
+  { id: 'willow-silk', name: '버들못 세사 원줄 0.8호', diameterMm: 0.145, strength: 1.8, visibility: 0, price: 300, level: 2, rarity: 'uncommon', desc: '매우 가늘어 섬세한 채비에 적합. 작은 하중에도 끊어지니 큰 고기는 피한다' },
+  { id: 'willow-balance', name: '버들못 정밀 원줄 1.7호', diameterMm: 0.22, strength: 4.5, visibility: 0.08, price: 850, level: 5, rarity: 'rare', desc: '붕어와 중형 잉어 사이의 균형. 초대물용 강도는 없다' },
+  { id: 'willow-heavy', name: '버들못 강공 원줄 6호', diameterMm: 0.405, strength: 10.5, visibility: 0.55, price: 2100, level: 8, rarity: 'epic', desc: '대물의 힘을 버티는 굵은 줄. 경계심 높은 고기의 입질과 채비 예민함은 줄어든다' },
+  { id: 'willow-master', name: '버들못 명인 세사 원줄 1호', diameterMm: 0.165, strength: 3.0, visibility: 0, price: 3300, level: 10, rarity: 'legendary', desc: '얇은 줄의 강도를 보강한 붕어용. 굵은 대물 원줄보다 버티는 힘은 낮다' },
+);
+HOOKS.push(
+  { id: 'willow-entry', name: '버들못 실속 붕어바늘 5호', gapMm: 4.5, hold: 0.96, attraction: 1.08, price: 65, level: 1, rarity: 'common', desc: '작은 지렁이와 떡밥을 쓰는 기본 붕어바늘' },
+  { id: 'willow-fine', name: '버들못 세축 바늘 3호', gapMm: 3.2, hold: 0.92, attraction: 1.3, price: 240, level: 2, rarity: 'uncommon', desc: '작은 입에도 잘 들어가지만 큰 미끼를 달기 어렵고 대물에는 쉽게 빠진다' },
+  { id: 'willow-balance', name: '버들못 정밀 바늘 7호', gapMm: 6, hold: 1.28, attraction: 1.06, price: 620, level: 4, rarity: 'rare', desc: '옥수수와 떡밥을 두루 쓰는 중형어용. 작은 붕어에는 다소 크다' },
+  { id: 'willow-forged', name: '버들못 강축 대물바늘 12호', gapMm: 11, hold: 1.85, attraction: 0.8, price: 1900, level: 7, rarity: 'epic', desc: '큰 잉어와 메기용. 큰 미끼는 잘 받지만 작은 물고기는 삼키기 어렵다' },
+  { id: 'willow-master', name: '버들못 명인 세축바늘 4호', gapMm: 3.8, hold: 1.2, attraction: 1.32, price: 3100, level: 10, rarity: 'legendary', desc: '약한 입질을 노리는 정밀 붕어용. 넓은 입의 대물에는 강축바늘이 유리하다' },
+);
+FLOATS.push(
+  { id: 'willow-wind', name: '버들못 바람 단찌', shape: 'short', notches: 6, sway: 0.35, sensitivity: 0.85, sinkSpeed: 0.65, scale: 1, price: 240, level: 2, rarity: 'uncommon', desc: '짧고 안정적인 수면 표시. 바람에 강하지만 작은 입질을 덜 보여 준다' },
+  { id: 'willow-fine', name: '버들못 세류 저부력찌', shape: 'slim', notches: 14, sway: 1.45, sensitivity: 1.6, sinkSpeed: 0.22, scale: 0.7, price: 880, level: 5, rarity: 'rare', desc: '고요한 물에서 섬세한 입질을 크게 표시. 자리 잡기가 느리고 물결에 약하다' },
+  { id: 'willow-deep', name: '버들못 심수 야광찌', shape: 'egg', notches: 10, sway: 0.55, light: 'chemi', glow: 2.2, sensitivity: 0.95, sinkSpeed: 0.8, scale: 1.25, price: 1650, level: 7, rarity: 'epic', desc: '깊은 수심과 야간 대물용. 빨리 서고 안정적이지만 저부력찌보다 둔하다' },
+  { id: 'willow-master', name: '버들못 명인 장찌', shape: 'peacock', notches: 18, sway: 1.35, sensitivity: 1.7, sinkSpeed: 0.25, scale: 0.85, price: 3600, level: 10, rarity: 'legendary', desc: '고요한 수면의 작은 올림을 길게 읽는다. 천천히 서고 바람·야간에는 불리하다' },
+);
+
 export const INGREDIENTS = [
   { id: 'bran', name: '미강', desc: '곡물떡밥과 집어제의 기본 재료', price: 25, count: 10 },
   { id: 'cornmeal', name: '옥수수 가루', desc: '곡물 향과 먹이 입자를 더한다', price: 35, count: 10 },

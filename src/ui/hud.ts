@@ -50,7 +50,7 @@ export interface HudHandlers {
   equip(kind: 'net' | 'keepnet', id: string): void;
   repair(key: string): void;
   learn(id: SkillId): void;
-  claim(kind: 'quest' | 'achievement', id: string): void;
+  claim(kind: 'quest' | 'achievement' | 'goal', id: string): void;
   join(id: string): void;
   quit(): void;
   release(id: string): void;
@@ -78,7 +78,7 @@ export class Hud {
   private rodSlots: P.RodStatus[] = [];
   private tournament: Tournament | null = null;
   private online = emptyOnlineState();
-  private readonly ui: P.UiState = { inventoryTab: 'all', invSelected: null, shopTab: 'bait', rigStep: 'rod', rigTarget: null, recordSpecies: 'crucian', weekly: false, questTab: 'daily', resetArmed: false, onlineSpecies: 'crucian', onlineScope: 'all', nicknameDraft: '', chatDraft: '' };
+  private readonly ui: P.UiState = { inventoryTab: 'all', invSelected: null, shopTab: 'bait', rigStep: 'rod', rigTarget: null, recordSpecies: 'crucian', weekly: false, questTab: 'personal', goalGroup: 'start', resetArmed: false, onlineSpecies: 'crucian', onlineScope: 'all', nicknameDraft: '', chatDraft: '' };
 
   constructor(
     private readonly root: HTMLElement,
@@ -197,8 +197,9 @@ export class Hud {
       case 'deploy': this.h.deploy(id); break;
       case 'recall': this.h.recall(id); rerender(); break;
       case 'learn': this.h.learn(id as SkillId); rerender(); break;
-      case 'claim': this.h.claim(kind as 'quest' | 'achievement', id); rerender(); break;
-      case 'quest-tab': this.ui.questTab = id as 'daily' | 'achieve'; rerender(); break;
+      case 'claim': this.h.claim(kind as 'quest' | 'achievement' | 'goal', id); rerender(); break;
+      case 'quest-tab': this.ui.questTab = id as P.UiState['questTab']; rerender(); break;
+      case 'goal-group': this.ui.goalGroup = id as P.UiState['goalGroup']; rerender(); break;
       case 'join': this.h.join(id); rerender(); break;
       case 'quit': this.h.quit(); rerender(); break;
       case 'inventory-tab': this.ui.inventoryTab = id as P.InvTab; rerender(); break;

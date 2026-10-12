@@ -283,7 +283,7 @@ const hud = new Hud(document.getElementById('hud')!, game, player, env, settings
   deploy(rodId) { deployRod(rodId); },
   recall(slotId) { removeRod(mounted.get(slotId)); },
   learn(id) { hud.toast(player.learn(id), 'good'); },
-  claim(kind, id) { hud.toast(kind === 'quest' ? player.claimQuest(id) : player.claimAchievement(id), 'good'); },
+  claim(kind, id) { hud.toast(kind === 'goal' ? player.claimPersonalGoal(id) : kind === 'quest' ? player.claimQuest(id) : player.claimAchievement(id), 'good'); },
   join(id) { joinTournament(id); },
   quit() {
     if (!tournament) return;
@@ -741,7 +741,7 @@ function finishCatch(keep: boolean) {
   if (keep && player.tooSmall(c)) { hud.toast('금지 체장 미만이라 놓아줘야 해요', 'bad'); return; }
   if (keep && player.keepnet.length >= player.keepnetSpec.capacity) { hud.toast('살림망이 가득 찼어요. 판매하거나 놓아주세요', 'bad'); return; }
   const level = player.level;
-  const { xp, bounty } = player.recordCatch(c, keep, active?.slot.platform ?? 0);
+  const { xp, bounty } = player.recordCatch(c, keep, active?.slot.platform ?? 0, game.rig);
   void onlineService?.submitCatch(c).catch(() => hud.toast('온라인 랭킹 저장을 못 했어요. 개인 기록은 저장됐습니다', 'bad'));
   game.finishCatch(keep);
   if (tournament?.submit(c.species.id, c.cm, c.kg)) hud.toast(`대회 기록 반영 · 현재 ${tournament.rank}위`, 'good');

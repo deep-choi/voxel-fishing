@@ -5,9 +5,10 @@ import { SKILL_IDS, SKILL_MAX, type SkillId } from './skills';
 import type { Catch } from './fishing';
 import { BAIT_PRODUCTS, baitProduct } from './realCatalog';
 import { ACTIVE_FISHERY, FISHERIES, type FisheryId } from './fisheries';
+import { personalGoals } from './personalGoals';
 
 export interface Rig { rodId: string; floatId: string; hookId: string; bait: BaitId; baitProductId?: string; chumProductId?: string; lineIdx: number; depthSet: number }
-export interface CatchRecord { id: string; species: SpeciesId; cm: number; kg: number; at: number; platform: number; fisheryId?: FisheryId; kept: boolean; sold: boolean; value: number; released?: boolean }
+export interface CatchRecord { id: string; species: SpeciesId; cm: number; kg: number; at: number; platform: number; fisheryId?: FisheryId; kept: boolean; sold: boolean; value: number; released?: boolean; rig?: Rig; releaseBonusPaid?: boolean }
 export interface PlacedRig { slotId: string; ownerId: string; rig: Rig; fisheryId?: FisheryId }
 export interface TournamentResult { id: string; name: string; at: number; rank: number; of: number; prize: number; score: string }
 export interface PlayerSave {
@@ -24,7 +25,8 @@ export interface PlayerSave {
   skills: Record<SkillId, number>;
   quests: { day: string; list: QuestState[] };
   achievements: string[];
-  stats: { earned: number; released: number; wins: number };
+  personalGoalClaims: string[];
+  stats: { earned: number; released: number; wins: number; equipmentPurchases: number };
   tournaments: TournamentResult[];
 }
 export type ShopKind = 'rod' | 'float' | 'hook' | 'line' | 'bait' | 'ingredient' | 'net' | 'keepnet';
@@ -43,7 +45,7 @@ const initial = (): PlayerSave => ({ version: 1, playerId: 'local-player', coins
   lines: ['1.5', '2'], nets: ['basic'], net: 'basic', keepnets: ['basic'], keepnetId: 'basic',
   wear: {},
   skills: { hookset: 0, strength: 0, chum: 0, trade: 0 },
-  quests: { day: '', list: [] }, achievements: [], stats: { earned: 0, released: 0, wins: 0 }, tournaments: [],
+  quests: { day: '', list: [] }, achievements: [], personalGoalClaims: [], stats: { earned: 0, released: 0, wins: 0, equipmentPurchases: 0 }, tournaments: [],
 });
 const number = (value: unknown, fallback: number) => typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : fallback;
 const ids = (value: unknown, allowed: { id: string; price: number }[], fallback: string[]) =>
@@ -54,6 +56,7 @@ export class PlayerProgress {
   readonly best: Record<string, number> = {};
   readonly keepnet: Catch[] = [];
   saveFailed = false;
+  private goalCache: ReturnType<typeof personalGoals> | null = null;
   constructor(private readonly repository: ProfileRepository = new LocalProfileRepository()) {
     this.data = initial();
     const raw = repository.load();
@@ -84,10 +87,21 @@ export class PlayerProgress {
       for (const id of SKILL_IDS) d.skills[id] = Math.min(SKILL_MAX, Math.floor(number(s.skills?.[id], 0)));
       if (s.quests && typeof s.quests.day === 'string' && Array.isArray(s.quests.list)) d.quests = s.quests;
       if (Array.isArray(s.achievements)) d.achievements = s.achievements.filter(a => typeof a === 'string');
-      d.stats = { earned: number(s.stats?.earned, 0), released: number(s.stats?.released, 0), wins: number(s.stats?.wins, 0) };
+      if (Array.isArray(s.personalGoalClaims)) d.personalGoalClaims = [...new Set(s.personalGoalClaims.filter(a => typeof a === 'string'))];
+      // 구버전에도 보유 중인 유료 장비는 첫 구매 목표로 인정한다.
+      const paidGear = RODS.some(r => r.price > 0 && d.rods[r.id] > (r.id === 'starter' ? 3 : 0))
+        || (['float', 'hook', 'line', 'net', 'keepnet'] as const).some(kind => PlayerProgress.catalog(kind).some(i =>
+          i.price > 0 && this.owns(kind, i.id) && !(kind === 'line' && ['1.5', '2', '3', '4'].includes(i.id))));
+      d.stats = { earned: number(s.stats?.earned, 0), released: number(s.stats?.released, 0), wins: number(s.stats?.wins, 0), equipmentPurchases: Math.floor(number(s.stats?.equipmentPurchases, +paidGear)) };
       if (Array.isArray(s.tournaments)) d.tournaments = s.tournaments.slice(-20);
       if (s.rig) d.rig = this.normalizeRig(s.rig);
-      if (Array.isArray(s.catches)) d.catches = s.catches.filter(c => c && c.species in SPECIES && typeof c.id === 'string' && c.cm > 0 && Number.isFinite(c.cm) && c.kg > 0 && Number.isFinite(c.kg) && Number.isFinite(c.at) && Number.isFinite(c.value) && c.value >= 0);
+      if (Array.isArray(s.catches)) {
+        const seen = new Set<string>();
+        d.catches = s.catches.filter(c => {
+          if (!c || !(c.species in SPECIES) || typeof c.id !== 'string' || seen.has(c.id) || !(c.cm > 0) || !Number.isFinite(c.cm) || !(c.kg > 0) || !Number.isFinite(c.kg) || !Number.isFinite(c.at) || !Number.isFinite(c.value) || c.value < 0) return false;
+          seen.add(c.id); return true;
+        });
+      }
       if (Array.isArray(s.placed)) d.placed = FISHERIES.flatMap(f => {
         const seen = new Set<string>();
         return s.placed!.filter(p => {
@@ -98,7 +112,7 @@ export class PlayerProgress {
     }
     for (const c of this.data.catches) {
       this.best[c.species] = Math.max(this.best[c.species] ?? 0, c.cm);
-      if (c.kept && !c.sold) this.keepnet.push({ id: c.id, species: SPECIES[c.species], cm: c.cm, kg: c.kg, at: c.at, rank: null, best: false });
+      if (c.kept && !c.sold && !c.released) this.keepnet.push({ id: c.id, species: SPECIES[c.species], cm: c.cm, kg: c.kg, at: c.at, rank: null, best: false });
     }
     // 이전 프로토타입의 최대어 기록을 이어받는다.
     try { const legacy = JSON.parse(localStorage.getItem('fishing-best') ?? '{}'); for (const id of Object.keys(SPECIES)) this.best[id] = Math.max(this.best[id] ?? 0, number(legacy[id], 0)); } catch { /* 이전 기록 없음 */ }
@@ -127,7 +141,7 @@ export class PlayerProgress {
   get netSpec() { return NETS.find(n => n.id === this.data.net) ?? NETS[0]; }
   get keepnetSpec() { return KEEPNETS.find(k => k.id === this.data.keepnetId) ?? KEEPNETS[0]; }
   get keepnetKg() { return this.keepnet.reduce((n, c) => n + c.kg, 0); }
-  save() { try { this.repository.save(this.data); this.saveFailed = false; } catch { this.saveFailed = true; } }
+  save() { this.goalCache = null; try { this.repository.save(this.data); this.saveFailed = false; } catch { this.saveFailed = true; } }
   genericBaitCount(id: BaitId | 'chum') {
     return Math.max(0, this.data.baits[id] - BAIT_PRODUCTS.filter(p => p.baseBait === id).reduce((n, p) => n + (this.data.baitProducts[p.id] ?? 0), 0));
   }
@@ -178,6 +192,7 @@ export class PlayerProgress {
       if (product) d.baitProducts[id] = (d.baitProducts[id] ?? 0) + (item.count as number);
     }
     if (kind === 'ingredient' && 'count' in item) d.ingredients[id as IngredientId] += item.count as number;
+    if (item.price > 0 && kind !== 'bait' && kind !== 'ingredient') d.stats.equipmentPurchases++;
     this.save(); return `${item.name} 구매 완료`;
   }
   equip(kind: 'net' | 'keepnet', id: string) {
@@ -195,11 +210,15 @@ export class PlayerProgress {
   addWear(key: string, amount: number) { this.data.wear[key] = Math.min(1, this.wearOf(key) + amount); }
   repairCost(key: string) {
     const [kind, id] = key.split(':');
+    // 기본 채비는 무료 정비하여 돈·미끼가 모두 없어도 다시 낚시할 수 있다.
+    if ((kind === 'rod' && id === 'starter') || (kind === 'line' && ['1.5', '2'].includes(id))) return 0;
     const price = kind === 'rod' ? RODS.find(r => r.id === id)?.price ?? 100 : LINES.find(l => l.id === id)?.price ?? 0;
     // 원줄은 새로 감는다 (최소 20원), 낚싯대는 마모만큼 수리비
     return kind === 'line' ? Math.max(20, Math.round(price * 0.4)) : Math.max(10, Math.round(price * 0.45 * this.wearOf(key)));
   }
   repair(key: string) {
+    const [kind, id] = key.split(':');
+    if (!(kind === 'rod' ? this.data.rods[id] > 0 : kind === 'line' && this.data.lines.includes(id))) return '보유한 장비만 정비할 수 있어요';
     if (this.wearOf(key) < 0.01) return '수리할 필요가 없어요';
     const cost = this.repairCost(key);
     if (this.data.coins < cost) return '수리비가 부족해요';
@@ -213,11 +232,12 @@ export class PlayerProgress {
   bounty(c: Catch) { return SPECIES_RULES[c.species.id].bounty ?? 0; }
   /** 금지 체장: 이보다 작으면 살림망에 넣을 수 없다 */
   tooSmall(c: Catch) { const min = SPECIES_RULES[c.species.id].minKeepCm; return min !== undefined && c.cm < min; }
-  recordCatch(c: Catch, kept: boolean, platform: number) {
-    const id = crypto.randomUUID();
+  recordCatch(c: Catch, kept: boolean, platform: number, rig?: Rig) {
+    if (c.id && this.data.catches.some(record => record.id === c.id)) return { xp: 0, bounty: 0 };
+    const id = c.id ?? crypto.randomUUID();
     c.id = id;
     const bounty = !kept ? this.bounty(c) : 0;
-    this.data.catches.push({ id, species: c.species.id, cm: c.cm, kg: c.kg, at: c.at, platform, fisheryId: ACTIVE_FISHERY.id, kept, sold: !kept, released: !kept && !bounty, value: kept ? this.catchValue(c) : bounty });
+    this.data.catches.push({ id, species: c.species.id, cm: c.cm, kg: c.kg, at: c.at, platform, fisheryId: ACTIVE_FISHERY.id, kept, sold: !kept, released: !kept && !bounty, value: kept ? this.catchValue(c) : bounty, rig: rig ? { ...rig } : undefined, releaseBonusPaid: !kept });
     if (bounty) { this.data.coins += bounty; this.data.stats.earned += bounty; }
     else if (!kept) { this.data.stats.released++; this.progressQuest('release', 1); }
     this.progressQuest('catch', 1, c.species.id);
@@ -229,14 +249,14 @@ export class PlayerProgress {
   }
   sellKeepnet() {
     let coins = 0;
-    for (const c of this.data.catches) if (c.kept && !c.sold) { coins += c.value; c.sold = true; }
+    for (const c of this.data.catches) if (c.kept && !c.sold && !c.released) { coins += c.value; c.sold = true; }
     this.data.coins += coins; this.data.stats.earned += coins; this.keepnet.length = 0;
     this.progressQuest('sell', coins);
     this.save(); return coins;
   }
   /** 어시장: 살림망에서 한 마리를 판다 */
   sellFish(id: string) {
-    const record = this.data.catches.find(c => c.id === id && c.kept && !c.sold);
+    const record = this.data.catches.find(c => c.id === id && c.kept && !c.sold && !c.released);
     const i = this.keepnet.findIndex(c => c.id === id);
     if (!record || i < 0) return '';
     const c = this.keepnet[i];
@@ -248,12 +268,18 @@ export class PlayerProgress {
   }
   /** 살림망에서 한 마리를 꺼내 놓아준다 */
   releaseFromKeepnet(id: string) {
-    const record = this.data.catches.find(c => c.id === id);
+    const record = this.data.catches.find(c => c.id === id && c.kept && !c.sold && !c.released);
     const i = this.keepnet.findIndex(c => c.id === id);
     if (!record || i < 0) return '';
     const c = this.keepnet[i];
     this.keepnet.splice(i, 1);
     record.sold = true; record.value = 0;
+    // 즉시 방생과 살림망에서 나중에 방생하는 경우의 총 경험치를 같게 맞춘다.
+    if (!record.releaseBonusPaid) {
+      const base = record.cm + record.kg * 15;
+      this.data.xp += Math.max(10, Math.round(base * 1.2)) - Math.max(10, Math.round(base));
+      record.releaseBonusPaid = true;
+    }
     if (this.bounty(c)) return this.sellOne(record);
     record.released = true; this.data.stats.released++; this.progressQuest('release', 1);
     this.save(); return `${c.species.name}을(를) 놓아줬어요`;
@@ -263,8 +289,9 @@ export class PlayerProgress {
     record.value = bounty; this.data.coins += bounty; this.data.stats.earned += bounty;
     this.save(); return `교란종 수매 +${bounty}원`;
   }
+  get canGatherWorms() { return this.data.baits.worm === 0 && this.data.coins < (BAIT_PACKS.find(p => p.id === 'worm')?.price ?? 30); }
   gatherWorms() {
-    if (this.data.baits.worm > 0 || this.data.coins >= 30) return '지렁이가 부족하면 상점에서 보충하세요';
+    if (!this.canGatherWorms) return '지렁이가 없고 구매할 돈이 부족할 때 채집할 수 있어요';
     this.data.baits.worm += 5; this.save(); return '지렁이 5개를 채집했어요';
   }
   craftFeed(id: string) {
@@ -285,6 +312,15 @@ export class PlayerProgress {
   }
 
   // ── 일일 의뢰·업적 ──
+  get personalGoals() { return this.goalCache ??= personalGoals(this.data); }
+  claimPersonalGoal(id: string) {
+    const goal = this.personalGoals.find(g => g.id === id);
+    if (!goal || goal.claimed) return '이미 받은 목표 보상이에요';
+    if (goal.locked || goal.have < goal.need) return '아직 달성하지 못했어요';
+    this.data.personalGoalClaims.push(id);
+    this.data.coins += goal.coins; this.data.xp += goal.xp;
+    this.save(); return `목표 달성 · +${goal.coins}원 · +${goal.xp} 경험치`;
+  }
   ensureQuests() {
     const day = today();
     if (this.data.quests.day === day) return;
@@ -320,7 +356,8 @@ export class PlayerProgress {
   get claimable() {
     const quests = this.data.quests.list.filter(q => !q.claimed && q.progress >= (dailyQuests(this.data.quests.day).find(d => d.id === q.id)?.target ?? Infinity)).length;
     const achievements = ACHIEVEMENTS.filter(a => !this.data.achievements.includes(a.id) && (([h, n]) => h >= n)(a.check(this.achievementStats))).length;
-    return quests + achievements;
+    const goals = this.personalGoals.filter(g => !g.claimed && !g.locked && g.have >= g.need).length;
+    return quests + achievements + goals;
   }
 
   // ── 대회 ──
