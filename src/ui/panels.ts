@@ -2,7 +2,7 @@ import { BAITS, BAIT_PACKS, FEED_RECIPES, FLOATS, HOOKS, INGREDIENTS, LINES, MAX
 import { ACHIEVEMENTS, dailyQuests, marketMul } from '../game/economy';
 import { WEATHER, type Environment } from '../game/environment';
 import type { Fishing } from '../game/fishing';
-import { ACTIVE_FISHERY, FISHERIES, findFishery } from '../game/fisheries';
+import { ACTIVE_FISHERY, FISHERIES, canEnterFishery, findFishery } from '../game/fisheries';
 import { preferredBaits, affinityLabel } from '../game/ecology';
 import { KEEPNETS, NETS, RARITY, SPECIES_RULES } from '../game/items';
 import type { PlayerProgress, ShopKind } from '../game/profile';
@@ -58,9 +58,9 @@ const tabs = (act: string, current: string, list: [string, string][]) =>
   `<div class="record-tabs">${list.map(([id, name]) => `<button class="btn small ${id === current ? 'on' : ''}" data-act="${act}" data-id="${id}">${name}</button>`).join('')}</div>`;
 
 export function fisheryCards() {
-  return `<div class="fishery-grid">${FISHERIES.map(f => `<button class="fishery-card ${f.id === ACTIVE_FISHERY.id ? 'selected' : ''}" data-act="fishery" data-id="${f.id}" style="--map-water:${f.palette.shallow};--map-leaf:${f.palette.leaf};--map-sand:${f.palette.sand};--map-accent:${f.palette.accent}">
+  return `<div class="fishery-grid">${FISHERIES.map(f => `<button class="fishery-card ${f.id === ACTIVE_FISHERY.id ? 'selected' : ''}" data-act="fishery" data-id="${f.id}" ${canEnterFishery(f.id) ? '' : 'disabled'} style="--map-water:${f.palette.shallow};--map-leaf:${f.palette.leaf};--map-sand:${f.palette.sand};--map-accent:${f.palette.accent}">
     <span class="fishery-preview ${f.id}"><i class="preview-hill"></i><i class="preview-shore"></i><i class="preview-deck"></i><i class="preview-roof"></i></span>
-    <span class="fishery-heading"><b>${f.name}</b><em>${f.id === ACTIVE_FISHERY.id ? '현재 낚시터' : f.difficulty}</em></span>
+    <span class="fishery-heading"><b>${f.name}</b><em>${!canEnterFishery(f.id) ? '준비 중' : f.id === ACTIVE_FISHERY.id ? '현재 낚시터' : f.difficulty}</em></span>
     <small>${f.theme}</small><span class="fishery-desc">${f.desc}</span><span class="fishery-targets">${f.targets.map(id => SPECIES[id].name).join(' · ')}</span>
     <small>미끼 ${f.recommendedBaits.map(id => BAITS[id].name).join(' · ')}<br>좌대 수심 ${f.platforms.depths[0]}~${f.platforms.depths[3]}m · 8좌대 · 좌대당 3대</small>
   </button>`).join('')}</div>`;

@@ -1,6 +1,10 @@
 import type { BaitId, SpeciesId } from './data';
 
 export type FisheryId = 'willow' | 'lotus' | 'moon' | 'gold';
+export const DEFAULT_FISHERY_ID: FisheryId = 'willow';
+/** 임시 개방 목록. 다른 맵의 지형·어종·저장 데이터는 그대로 보관한다. */
+const OPEN_FISHERIES: readonly FisheryId[] = [DEFAULT_FISHERY_ID];
+export const canEnterFishery = (id?: string | null) => OPEN_FISHERIES.some(open => open === id);
 export interface Fishery {
   id: FisheryId; name: string; theme: string; desc: string; difficulty: string;
   targets: SpeciesId[]; recommendedBaits: BaitId[];
@@ -61,8 +65,12 @@ export const FISHERIES: Fishery[] = [
 export const findFishery = (id?: string | null) => FISHERIES.find(f => f.id === id);
 function selectedFishery(): Fishery {
   const query = new URLSearchParams(location.search).get('map');
-  if (findFishery(query)) return findFishery(query)!;
-  try { return findFishery(localStorage.getItem('fishing-map-v1')) ?? FISHERIES[0]; } catch { return FISHERIES[0]; }
+  const fallback = findFishery(DEFAULT_FISHERY_ID)!;
+  if (query) return canEnterFishery(query) ? findFishery(query)! : fallback;
+  try {
+    const saved = localStorage.getItem('fishing-map-v1');
+    return canEnterFishery(saved) ? findFishery(saved)! : fallback;
+  } catch { return fallback; }
 }
 /** 한 세션의 맵은 고정. 전환할 때 저장한 뒤 새 월드를 로드한다. */
 export const ACTIVE_FISHERY = selectedFishery();

@@ -7,10 +7,10 @@ import './style.css';
 import { Sound } from './audio';
 import { BAITS, FLOATS, HOOKS, LINES, MAX_DEPLOYED_RODS, RODS, rodAction, type BaitId } from './game/data';
 import { baitProduct } from './game/realCatalog';
-import { ACTIVE_FISHERY, findFishery } from './game/fisheries';
+import { ACTIVE_FISHERY, canEnterFishery, findFishery } from './game/fisheries';
 import { SPECIES, type SpeciesId } from './game/data';
 import type { OnlineService } from './game/online';
-import type { OnlineTab } from './game/onlineState';
+import { emptyOnlineState, type OnlineTab } from './game/onlineState';
 import { tournamentAvailable } from './game/tournament';
 import { Environment } from './game/environment';
 import { mods } from './game/modifiers';
@@ -38,6 +38,12 @@ import { DECK_Y, FISHING_POSITION_OFFSET, Platforms, type RodSlot } from './worl
 // 진입점: 장면을 세우고, 입력 → 게임 규칙 → 화면·소리를 매 프레임 잇는다.
 
 const params = new URLSearchParams(location.search);
+if (params.has('map') && !canEnterFishery(params.get('map'))) {
+  const url = new URL(location.href);
+  url.searchParams.set('map', ACTIVE_FISHERY.id);
+  history.replaceState(null, '', url.href);
+  params.set('map', ACTIVE_FISHERY.id);
+}
 const stage = document.getElementById('stage')!;
 const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
 // 그래픽 스타일: 기본 3D 도트 / ?style=smooth (사실적 시도) / ?style=voxel (마인크래프트풍)
@@ -181,6 +187,10 @@ function connectOnline() {
     onlineService = new OnlineService();
     onlineService.subscribe(state => hud.setOnline(state));
     return onlineService;
+  }).catch(error => {
+    onlinePromise = null;
+    hud.setOnline({ ...emptyOnlineState(), ready: true, error: '온라인 연결에 실패했어요. 다시 로그인해 주세요' });
+    throw error;
   });
 }
 
@@ -215,6 +225,15 @@ const hud = new Hud(document.getElementById('hud')!, game, player, env, settings
     sound.start();
     lock();
     applyTouch();
+    if (game.phase === 'landed' && !landing) hud.showCatch(game.lastCatch);
+  },
+  sessionEnded() {
+    input.primary = input.lift = input.hookset = input.retrieve = false;
+    walk.w = walk.a = walk.s = walk.d = false;
+    zoom = false;
+    hud.showCatch(null);
+    applyTouch();
+    if (locked()) document.exitPointerLock();
   },
   resume() {
     if (hud.started) { sound.start(); lock(); }
@@ -270,6 +289,9 @@ const hud = new Hud(document.getElementById('hud')!, game, player, env, settings
     location.reload();
   },
 });
+
+// 로그인 상태를 먼저 복원한다. 기존 닉네임이 있으면 기본 맵에 자동 입장한다.
+void connectOnline().catch(() => hud.toast('로그인 연결을 다시 시도해 주세요', 'bad'));
 
 // ── 모바일 터치 ───────────────────────────
 const touch = new TouchControls(document.getElementById('hud')!, {
@@ -343,6 +365,7 @@ document.addEventListener('mousemove', (e) => {
 });
 canvas.addEventListener('mousedown', (e) => {
   if (!hud.started) return;
+  if (hud.modal === 'none') sound.start();
   if (!locked() && hud.modal === 'none') lock();
   if (!playing()) return;
   if (e.button === 0) {
@@ -423,6 +446,7 @@ function savePlacement() {
 }
 function travelFishery(id: string) {
   const target = findFishery(id);
+  if (target && !canEnterFishery(target.id)) { hud.toast('이 낚시터는 아직 준비 중이에요'); return; }
   if (!target || target.id === ACTIVE_FISHERY.id) return;
   if (busy() || Array.from(mounted.values()).some(m => m.game.phase === 'fighting' || m.game.phase === 'landed')) { hud.toast('진행 중인 캐스팅이나 물고기 처리를 마친 뒤 낚시터를 옮겨 주세요'); return; }
   if (tournament) { hud.toast('대회를 마치거나 포기한 뒤 낚시터를 옮겨 주세요'); return; }
@@ -929,7 +953,7 @@ function startLanding() {
 }
 
 function updateLanding(dt: number) {
-  if (!landing) return;
+  if (!landing || !hud.started) return;
   const L = landing, m = L.model;
   L.t += dt;
   const s = Math.min(1, L.t / L.dur), split = 0.6;
@@ -1158,7 +1182,7 @@ timer.connect(document);
 let simTime = 0;
 
 function frame(dt: number, render = true) {
-  const paused = hud.modal === 'pause';
+  const paused = !hud.started || hud.modal === 'pause';
   simTime += dt;
   const t = simTime;
   shared.uTime.value = t;
@@ -1257,9 +1281,7 @@ Object.assign(window, {
       for (let i = 0; i < n; i++) frame(1 / 60, render && i === n - 1);
     },
     start() {
-      hud.started = true;
-      document.querySelector<HTMLElement>('[data-ref="start"]')!.hidden = true;
-      applyTouch();
+      return hud.enterGame();
     },
   },
 });

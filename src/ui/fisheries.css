@@ -4,6 +4,7 @@
 .fishery-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 16px 0 22px; }
 .fishery-card { display: block; padding: 10px; text-align: left; color: #263126; background: #d6d5c3; font: inherit; cursor: pointer; border: 3px solid #4d5646; border-radius: 0; box-shadow: inset 2px 2px #f6f3dd, inset -2px -2px #8d9280; }
 .fishery-card:hover { background: #e4e3cd; }
+.fishery-card:disabled { cursor: not-allowed; opacity: 0.55; filter: grayscale(0.7); background: #d6d5c3; }
 .fishery-card.selected { border-color: var(--map-accent); outline: 2px solid #ffffff77; }
 .fishery-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 9px 0 5px; }
 .fishery-heading b { font-size: 15px; }

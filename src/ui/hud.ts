@@ -22,6 +22,7 @@ import './online.css';
 
 export interface HudHandlers {
   start(): void;
+  sessionEnded(): void;
   /** 패널을 닫고 게임으로 돌아갈 때 */
   resume(): void;
   keep(keep: boolean): void;
@@ -88,7 +89,7 @@ export class Hud {
     <p class="kicker">${ACTIVE_FISHERY.name} · 민물 찌낚시</p>
     <h1>좌대 낚시</h1>
     <button class="btn small" data-act="menu" data-id="online" data-ref="onlineEntry">Google 로그인 · 닉네임</button>
-    <p class="lead">마음에 드는 낚시터를 고르고 세 대의 찌를 펼쳐 보세요.</p>
+    <p class="lead">Google 로그인 후 버들못에서 낚시를 시작하세요.</p>
     ${P.fisheryCards()}
     <ul class="keys">
       <li><kbd>마우스</kbd> 둘러보기 · <kbd>WASD</kbd> 걷기 · <kbd>M</kbd> 좌대 이동</li>
@@ -99,7 +100,7 @@ export class Hud {
       <li><kbd>1</kbd>~<kbd>3</kbd> 낚싯대 · <kbd>4</kbd> 집어</li>
       <li><kbd>I</kbd> 가방 <kbd>C</kbd> 채비 <kbd>B</kbd> 상점 <kbd>Q</kbd> 의뢰 <kbd>T</kbd> 대회 <kbd>K</kbd> 기술 <kbd>O</kbd> 설정</li>
     </ul>
-    <button class="btn primary" data-act="start">좌대 들어가기 <span>→</span></button>
+    <button class="btn primary" data-act="start" data-ref="entry" disabled>계정 확인 중…</button>
     <p class="tip">시간·날씨에 따라 어종별 입질이 달라져요</p>
   </div>
 </div>
@@ -139,16 +140,16 @@ export class Hud {
 
   private onClick(ev: Event) {
     const t = (ev.target as HTMLElement).closest<HTMLElement>('[data-act]');
-    if (!t) return;
+    if (!t || t.matches(':disabled')) return;
     ev.stopPropagation();
     const id = t.dataset.id!;
     const kind = t.dataset.kind!;
     const rerender = () => this.renderModal();
     switch (t.dataset.act) {
       case 'start':
-        this.started = true;
-        this.el.start.hidden = true;
-        this.h.start();
+        if (this.enterGame()) break;
+        if (this.online.uid) { this.ui.onlineTab = 'account'; this.open('online'); }
+        else this.h.online('login');
         break;
       case 'look': { const url = new URL(location.href); url.searchParams.set('style', id); location.assign(url.href); break; }
       case 'resume': this.close(); break;
@@ -217,6 +218,7 @@ export class Hud {
   }
 
   open(m: Modal) {
+    if (!this.started && m !== 'online') return;
     const onlineWasOpen = this.modal === 'online';
     this.modal = m;
     if (!this.started) this.el.start.hidden = true;
@@ -242,10 +244,36 @@ export class Hud {
   private syncOnlineView() {
     this.h.online('view', JSON.stringify({ tab: this.modal === 'online' ? this.ui.onlineTab : null, species: this.ui.onlineSpecies, scope: this.ui.onlineScope }));
   }
+  /** 버튼·인증 복원·디버그 입장에 같은 인증 조건을 적용한다. */
+  enterGame() {
+    if (!this.online.ready || !this.online.uid || !this.online.nickname || this.online.busy) return false;
+    if (this.started) return true;
+    this.started = true;
+    this.el.start.hidden = true;
+    this.modal = 'none';
+    this.renderModal();
+    this.syncOnlineView();
+    this.h.start();
+    return true;
+  }
   setOnline(state: OnlineState) {
     if (this.online.uid !== state.uid) { this.ui.nicknameDraft = ''; this.ui.chatDraft = ''; }
     this.online = { ...state };
     this.el.onlineEntry.textContent = state.nickname ? `${state.nickname} · 온라인` : 'Google 로그인 · 닉네임';
+    (this.el.entry as HTMLButtonElement).disabled = !state.ready || state.busy;
+    this.el.entry.textContent = !state.ready ? '계정 확인 중…' : state.busy ? '연결 중…' : state.uid ? '닉네임 설정 후 입장' : 'Google 로그인하고 입장 →';
+    if (this.started && (!state.uid || !state.ready || !state.nickname)) {
+      this.started = false;
+      this.modal = 'none';
+      this.el.start.hidden = false;
+      this.renderModal();
+      this.h.sessionEnded();
+      this.syncOnlineView();
+    }
+    if (!this.started && state.ready && state.uid) {
+      if (this.enterGame()) return;
+      if (!state.nickname && this.modal !== 'online') { this.ui.onlineTab = 'account'; this.open('online'); }
+    }
     if (this.modal !== 'online') return;
     const input = document.activeElement instanceof HTMLInputElement ? document.activeElement : null;
     const id = input?.id, start = input?.selectionStart ?? null, end = input?.selectionEnd ?? null;
