@@ -178,6 +178,7 @@ export class Fishing {
   private approachRates: EncounterRate[] | null = null;
   private approachAt = 0;
   private slackT = 0;
+  private hookOverloadT = 0;
   private prevStretch = 0;
   private lineStrength = 3.6;
   private liftHeld = false;
@@ -568,6 +569,7 @@ export class Fishing {
     this.liftT = 0;
     this.lineStrength = this.line.strength;
     this.slackT = 0;
+    this.hookOverloadT = 0;
     this.prevStretch = NaN;
     // 챔질 직후: 줄은 고기까지 거의 팽팽
     this.lineOut = this.rod.line;
@@ -672,7 +674,7 @@ export class Fishing {
     if (this.tension > this.lineStrength) return this.lose('break');
     // 대를 세운 채 허용 하중을 크게 넘기면 낚싯대가 부러진다 (숙이면 줄이 직접 받는다)
     if (!inp.lift && this.tension > rodBreakLoad(this.rod)) return this.lose('rod');
-    if (this.tension > f.hookHold) return this.lose('unhook');
+    if (this.hookComesLoose(dt, f, 0)) return this.lose('unhook');
     tmp.set(this.origin.x - f.pos.x, 0, this.origin.z - f.pos.z).normalize();
     const leverage = this.rod.power * (0.8 + Math.max(0, inp.rodDir.y) * 0.8);
     const gain = pulling ? THREE.MathUtils.clamp((leverage - resistance) / this.rod.power, 0.06, 1.4) * 1.9 : 0;
@@ -708,6 +710,7 @@ export class Fishing {
     const kRod = this.rod.power / (this.rod.flex * (0.12 + 0.88 * sinA));
     const k = 1 / (1 / kLine + 1 / kRod);
     const d = tmp.subVectors(tip, f.pos).length();
+    if (Number.isNaN(this.prevStretch)) this.lineOut = Math.max(this.lineOut, d - 0.02);
     const stretch = d - this.lineOut;
     if (Number.isNaN(this.prevStretch)) this.prevStretch = stretch;
     // 늘어나는 속도에 비례한 감쇠 (줄이 튕기듯 진동하지 않게), 너무 큰 값은 자른다
@@ -718,13 +721,7 @@ export class Fishing {
 
     if (T > this.lineStrength) return this.lose('break');
     if (!inp.lift && T > rodBreakLoad(this.rod)) return this.lose('rod');
-    if (T > f.hookHold) return this.lose('unhook');
-    if (T < 0.03) this.slackT += h;
-    else this.slackT = Math.max(0, this.slackT - h * 2);
-    if (this.slackT > 1.4) {
-      const shake = f.behavior === 'shake' ? 2.5 : 1;
-      if (Math.random() < h * 0.22 * shake * f.slackRisk) return this.lose('unhook');
-    }
+    if (this.hookComesLoose(h, f, -stretch)) return this.lose('unhook');
 
     // 물고기 행동
     f.bTime -= h;
@@ -765,6 +762,24 @@ export class Fishing {
     const effort = (factor * 0.6 + 0.25) * (0.5 + 0.9 * Math.min(1.5, T / f.pullKg)) * (this.liftHeld ? 1.25 : 1);
     const stamSec = f.sp.stamina[0] + f.sp.stamina[1] * f.kg;
     f.stamina = THREE.MathUtils.clamp(f.stamina - (h * effort) / stamSec + (f.behavior === 'rest' ? h * 0.006 : 0), 0, 1);
+  }
+
+  private hookComesLoose(dt: number, fish: Fish, slackMeters: number) {
+    // 짧은 장력 피크는 버틴다. 지속 과부하는 누적되며 힘을 풀면 회복한다.
+    // 유지력의 1.5배는 약 1초, 2배는 약 0.5초가 지속되면 빠진다.
+    const overload = this.tension / Math.max(0.05, fish.hookHold) - 1;
+    this.hookOverloadT = overload > 0
+      ? this.hookOverloadT + dt * THREE.MathUtils.clamp(overload * 2, 0.2, 4)
+      : Math.max(0, this.hookOverloadT - dt * 2);
+    if (this.hookOverloadT >= 1) return true;
+
+    // 미세한 처짐은 무시하고, 줄이 35cm 이상 느슨한 상태가 이어질 때만 판정한다.
+    this.slackT = slackMeters > 0.35 ? this.slackT + dt : 0;
+    if (this.slackT <= 3.5) return false;
+    const shake = fish.behavior === 'shake' ? 1.6 : 1;
+    const risk = THREE.MathUtils.clamp(fish.slackRisk, 0.25, 2.2);
+    const rate = 0.025 * shake * risk;
+    return Math.random() < 1 - Math.exp(-rate * dt);
   }
 
   private lose(reason: 'break' | 'unhook' | 'rod', quiet = false) {
