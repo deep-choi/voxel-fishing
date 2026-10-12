@@ -27,3 +27,17 @@
 #hud .quality-shop .spec-row { min-width: 600px; grid-template-columns: 48px 1fr 1fr 1fr 86px 88px; font-variant-numeric: tabular-nums; }
 #hud .quality-shop .spec-row > span:nth-child(4), #hud .quality-shop .spec-row > span:nth-child(5) { display: block; }
 #hud .quality-shop .spec-quality-price strong { display: block; margin-top: 2px; font-size: 11px; white-space: nowrap; }
+#hud .quality-shop .shop-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 5px; }
+#hud .quality-shop .shop-card > .shop-actions { grid-column: 2; align-self: end; }
+#hud .quality-shop .spec-row .shop-actions { flex-direction: column; align-items: stretch; }
+#hud .quality-shop .spec-row .shop-actions .btn { width: 100%; white-space: nowrap; }
+#hud .quality-shop .shop-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 9px 0 13px; border-bottom: 2px solid #818a70; margin-bottom: 10px; }
+#hud .quality-shop .shop-filters .record-tabs { flex-basis: 100%; margin: 0; }
+#hud .quality-shop .shop-filters > small { margin-left: auto; color: var(--dim); }
+#hud .quality-shop .shop-saving { display: grid; gap: 9px; padding: 12px; margin: 0 0 14px; border: 2px solid #667448; background: #c2c9a7; box-shadow: inset 2px 2px #e3e7cc, inset -2px -2px #98a578; }
+#hud .quality-shop .shop-saving-heading { display: flex; flex-wrap: wrap; gap: 6px 9px; align-items: center; }
+#hud .quality-shop .shop-saving-heading > span:first-child { font-size: 11px; color: #465131; }
+#hud .quality-shop .shop-saving-heading > b { font-size: 14px; }
+#hud .quality-shop .shop-saving > .bar { display: block; width: 100%; height: 11px; }
+#hud .quality-shop .shop-saving-numbers { display: flex; flex-wrap: wrap; gap: 5px 12px; justify-content: space-between; font-size: 12px; font-variant-numeric: tabular-nums; }
+#hud .quality-shop .shop-saving-numbers > span { color: #465131; }

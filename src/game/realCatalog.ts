@@ -1,4 +1,5 @@
-import type { BaitId } from './data';
+import type { BaitId, SpeciesId } from './data';
+import { createHouseBaits } from './baitExpansion';
 
 /** 실제 모델의 조사 자료. 가격·해금·하중·입질 배율은 별도의 게임 수치다. */
 export const BRANDS = {
@@ -64,8 +65,12 @@ for (const id of ['small', 'sharp', 'owner7']) PRODUCT_INFO[`hook:${id}`] = offi
 for (const id of ['medium', 'large', 'monster', 'ise5', 'ise9']) PRODUCT_INFO[`hook:${id}`] = official('gamakatsu', SOURCES.gamakatsu, '이세니(伊勢尼) · 굵은 축, 안쪽으로 향한 바늘 끝 · 제조사 1~15호 목록');
 export const catalogInfo = (kind: string, id: string) => PRODUCT_INFO[`${kind}:${id}`];
 
-export interface BaitProduct extends ProductInfo {
+export interface BaitProduct extends Partial<ProductInfo> {
   id: string; name: string; baseBait: BaitId | 'chum'; count: number; price: number; level: number; desc: string;
+  /** 자체 상품에는 실존 브랜드나 출처 링크를 붙이지 않는다. */
+  origin?: 'house'; qualityTier?: 1 | 2 | 3 | 4 | 5; purpose?: string;
+  speciesAffinity?: Partial<Record<SpeciesId, number>>;
+  chumFlavor?: BaitId;
   /** 실제 제품의 효능 수치가 아니라 게임에서 제품을 구별하는 배율 */
   biteScale: number; chumScale: number;
 }
@@ -82,5 +87,10 @@ export const BAIT_PRODUCTS: BaitProduct[] = [
   { ...official('marukyu', SOURCES.a21, 'グルテンα21 · 가벼운 에사, 오래 기다리는 낚시용'), id: 'mq-alpha21', name: '마루큐 글루텐 α21', baseBait: 'gluten', count: 20, price: 160, level: 3, desc: '예민한 붕어용 가벼운 글루텐 떡밥', biteScale: 1.2, chumScale: 0.95 },
   { ...official('marukyu', SOURCES.koi, '大ごい · 실제 포장 300g / 덕용 1,000g · 잉어 찌낚시 겸용'), id: 'mq-ookoi', name: '마루큐 오끼고이', baseBait: 'pellet', count: 20, price: 140, level: 2, desc: '잉어용 배합 떡밥. 게임에서는 어분 계열로 사용', biteScale: 1.18, chumScale: 1.25 },
 ];
+BAIT_PRODUCTS.find(p => p.id === 'kw-chum')!.chumFlavor = 'paste';
+BAIT_PRODUCTS.find(p => p.id === 'toco-11')!.chumFlavor = 'pellet';
+BAIT_PRODUCTS.push(...createHouseBaits());
 export const baitProduct = (id?: string) => BAIT_PRODUCTS.find(p => p.id === id);
-for (const p of BAIT_PRODUCTS) PRODUCT_INFO[`bait:${p.id}`] = p;
+for (const p of BAIT_PRODUCTS) if (p.brand && p.source && p.sourceKind && p.facts) {
+  PRODUCT_INFO[`bait:${p.id}`] = { brand: p.brand, source: p.source, sourceKind: p.sourceKind, facts: p.facts };
+}

@@ -1,5 +1,6 @@
 import { createExtraSpecies } from './extraSpecies';
 import { SIZE_RANKS } from './sizeRanks';
+import { EXPANDED_FLOATS, EXPANDED_HOOKS, EXPANDED_LINES, EXPANDED_RODS, EXPANDED_ROD_ACTION } from './gearExpansion';
 import { FISH_LOOKS, type FishLook } from './fishArt';
 export type { FishLook } from './fishArt';
 // 어종과 채비 데이터. 수심·출현율·장비 수치는 게임 밸런스다.
@@ -31,7 +32,7 @@ export const BAIT_IDS = Object.keys(BAITS) as BaitId[];
 
 export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
 /** 상점·가방에서 공통으로 쓰는 등급과 해금 레벨 */
-export interface GearMeta { rarity: Rarity; level: number }
+export interface GearMeta { rarity: Rarity; level: number; purpose?: string }
 
 export interface LineSpec extends GearMeta {
   id: string;
@@ -188,6 +189,13 @@ FLOATS.push(
   { id: 'willow-deep', name: '버들못 심수 야광찌', shape: 'egg', notches: 10, sway: 0.55, light: 'chemi', glow: 2.2, sensitivity: 0.95, sinkSpeed: 0.8, scale: 1.25, price: 1650, level: 7, rarity: 'epic', desc: '깊은 수심과 야간 대물용. 빨리 서고 안정적이지만 저부력찌보다 둔하다' },
   { id: 'willow-master', name: '버들못 명인 장찌', shape: 'peacock', notches: 18, sway: 1.35, sensitivity: 1.7, sinkSpeed: 0.25, scale: 0.85, price: 3600, level: 10, rarity: 'legendary', desc: '고요한 수면의 작은 올림을 길게 읽는다. 천천히 서고 바람·야간에는 불리하다' },
 );
+
+// 4단계 전용 장비 계열. 저장된 원줄 인덱스를 보존하려고 기존 상품 뒤에 추가한다.
+RODS.push(...EXPANDED_RODS);
+Object.assign(ROD_ACTION, EXPANDED_ROD_ACTION);
+LINES.push(...EXPANDED_LINES);
+HOOKS.push(...EXPANDED_HOOKS);
+FLOATS.push(...EXPANDED_FLOATS);
 
 export const INGREDIENTS = [
   { id: 'bran', name: '미강', desc: '곡물떡밥과 집어제의 기본 재료', price: 25, count: 10 },

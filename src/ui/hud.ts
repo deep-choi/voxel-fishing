@@ -36,6 +36,8 @@ export interface HudHandlers {
   /** 채비 창에서 고른 대의 낚시 상태 */
   rigGame(target: string): Fishing;
   buy(kind: ShopKind, id: string): void;
+  shopGoal(kind: ShopKind, id: string): void;
+  clearShopGoal(): void;
   sell(): void;
   /** 어시장에서 한 마리 판매 */
   sellOne(id: string): void;
@@ -78,7 +80,7 @@ export class Hud {
   private rodSlots: P.RodStatus[] = [];
   private tournament: Tournament | null = null;
   private online = emptyOnlineState();
-  private readonly ui: P.UiState = { inventoryTab: 'all', invSelected: null, shopTab: 'bait', rigStep: 'rod', rigTarget: null, recordSpecies: 'crucian', weekly: false, questTab: 'personal', goalGroup: 'start', resetArmed: false, onlineSpecies: 'crucian', onlineScope: 'all', nicknameDraft: '', chatDraft: '' };
+  private readonly ui: P.UiState = { inventoryTab: 'all', invSelected: null, shopTab: 'bait', shopQuality: 0, shopAffordable: false, rigStep: 'rod', rigTarget: null, recordSpecies: 'crucian', weekly: false, questTab: 'personal', goalGroup: 'start', resetArmed: false, onlineSpecies: 'crucian', onlineScope: 'all', nicknameDraft: '', chatDraft: '' };
 
   constructor(
     private readonly root: HTMLElement,
@@ -185,6 +187,10 @@ export class Hud {
       case 'rig-step': this.ui.rigStep = id as P.RigStep; rerender(); break;
       case 'buy': this.h.buy(kind as ShopKind, id); rerender(); break;
       case 'shop-tab': this.ui.shopTab = id as P.ShopTab; rerender(); break;
+      case 'shop-quality': this.ui.shopQuality = Math.max(0, Math.min(5, Number(id) || 0)); rerender(); break;
+      case 'shop-affordable': this.ui.shopAffordable = !this.ui.shopAffordable; rerender(); break;
+      case 'shop-goal': this.h.shopGoal(kind as ShopKind, id); rerender(); break;
+      case 'clear-shop-goal': this.h.clearShopGoal(); rerender(); break;
       case 'sell': this.h.sell(); rerender(); break;
       case 'sell-one': this.h.sellOne(id); rerender(); break;
       case 'release': this.h.release(id); rerender(); break;

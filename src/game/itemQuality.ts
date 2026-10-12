@@ -7,7 +7,7 @@ export interface ItemQuality { label: string; tier: number; purpose: string }
 export const QUALITY_LABELS = ['기본', '실용', '고급', '전문', '명품'] as const;
 const TIERS: Record<Rarity, number> = { common: 1, uncommon: 2, rare: 3, epic: 4, legendary: 5 };
 const quality = (tier: number, purpose: string): ItemQuality => ({ tier, label: QUALITY_LABELS[tier - 1] ?? QUALITY_LABELS[0], purpose });
-const gearQuality = (gear: GearMeta | undefined, purpose: string) => quality(gear ? TIERS[gear.rarity] : 1, purpose);
+const gearQuality = (gear: GearMeta | undefined, purpose: string) => quality(gear ? TIERS[gear.rarity] : 1, gear?.purpose ?? purpose);
 const BAIT_USE: Record<BaitId | 'chum', string> = {
   worm: '생미끼 · 다양한 어종', paste: '곡물 · 붕어·잉어', corn: '큰 미끼 · 잉어',
   gluten: '섬세한 떡밥 · 붕어', pellet: '어분 · 잉어·향어', shrimp: '생미끼 · 육식어', chum: '주변 집어',
@@ -53,7 +53,7 @@ export function itemQuality(kind: string, id: string): ItemQuality {
     }
     case 'bait': {
       const product = BAIT_PRODUCTS.find(x => x.id === id);
-      if (product) return quality(BAIT_TIERS[id] ?? 2, BAIT_USE[product.baseBait]);
+      if (product) return quality(product.qualityTier ?? BAIT_TIERS[id] ?? 2, product.purpose ?? BAIT_USE[product.baseBait]);
       if (id === 'chum') return quality(1, BAIT_USE.chum);
       return quality(1, BAITS[id as BaitId] ? BAIT_USE[id as BaitId] : '기본 미끼');
     }

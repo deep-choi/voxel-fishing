@@ -270,6 +270,8 @@ const hud = new Hud(document.getElementById('hud')!, game, player, env, settings
   rig(kind, id, target) { changeRig(kind, id, rigGameOf(target)); },
   rigGame(target) { return rigGameOf(target); },
   buy(kind, id) { hud.toast(player.buy(kind, id)); },
+  shopGoal(kind, id) { hud.toast(player.setShopGoal(kind, id)); },
+  clearShopGoal() { hud.toast(player.clearShopGoal()); },
   sell() { hud.toast(`살림망 판매 +${player.sellKeepnet()}원`, 'good'); },
   sellOne(id) { hud.toast(player.sellFish(id), 'good'); },
   release(id) { hud.toast(player.releaseFromKeepnet(id)); },

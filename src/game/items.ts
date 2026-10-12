@@ -1,4 +1,5 @@
 import type { GearMeta, Rarity, SpeciesId } from './data';
+import { EXPANDED_KEEPNETS, EXPANDED_NETS } from './gearExpansion';
 
 // 낚싯대·채비 밖의 장비: 뜰채, 살림망. 등급 색은 마인크래프트 아이템 이름 색을 따른다.
 // 상품명의 브랜드는 실제 국내 판매 브랜드다. 출시 전 상표 사용 허락을 받거나 가상 이름으로 바꾼다.
@@ -34,6 +35,9 @@ export const KEEPNETS: KeepnetSpec[] = [
   { id: 'willow-master', name: '버들못 명인 살림망', capacity: 220, price: 5800, level: 11, rarity: 'legendary', desc: '장시간 조과를 담는 220칸. 수시로 판매한다면 작은 살림망으로 충분하다' },
 ];
 
+
+NETS.push(...EXPANDED_NETS);
+KEEPNETS.push(...EXPANDED_KEEPNETS);
 
 /** 어종별 시세·규정. 배스·블루길은 생태계교란종이라 방생 대신 수매한다. */
 export const SPECIES_RULES: Record<SpeciesId, { perKg: number; minKeepCm?: number; bounty?: number; active: 'day' | 'night' | 'twilight' | 'any' }> = {

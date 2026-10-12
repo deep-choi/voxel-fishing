@@ -26,10 +26,12 @@ export interface PlayerSave {
   quests: { day: string; list: QuestState[] };
   achievements: string[];
   personalGoalClaims: string[];
+  shopGoal?: { kind: ShopKind; id: string };
   stats: { earned: number; released: number; wins: number; equipmentPurchases: number };
   tournaments: TournamentResult[];
 }
 export type ShopKind = 'rod' | 'float' | 'hook' | 'line' | 'bait' | 'ingredient' | 'net' | 'keepnet';
+const SHOP_KINDS: readonly ShopKind[] = ['rod', 'float', 'hook', 'line', 'bait', 'ingredient', 'net', 'keepnet'];
 
 /** 로컬 저장소를 서버 저장소로 교체할 수 있도록 플레이어 데이터 경계를 분리한다. */
 export interface ProfileRepository { load(): unknown; save(profile: PlayerSave): void }
@@ -88,6 +90,7 @@ export class PlayerProgress {
       if (s.quests && typeof s.quests.day === 'string' && Array.isArray(s.quests.list)) d.quests = s.quests;
       if (Array.isArray(s.achievements)) d.achievements = s.achievements.filter(a => typeof a === 'string');
       if (Array.isArray(s.personalGoalClaims)) d.personalGoalClaims = [...new Set(s.personalGoalClaims.filter(a => typeof a === 'string'))];
+      if (s.shopGoal && SHOP_KINDS.includes(s.shopGoal.kind) && PlayerProgress.catalog(s.shopGoal.kind).some(i => i.id === s.shopGoal!.id)) d.shopGoal = { kind: s.shopGoal.kind, id: s.shopGoal.id };
       // 구버전에도 보유 중인 유료 장비는 첫 구매 목표로 인정한다.
       const paidGear = RODS.some(r => r.price > 0 && d.rods[r.id] > (r.id === 'starter' ? 3 : 0))
         || (['float', 'hook', 'line', 'net', 'keepnet'] as const).some(kind => PlayerProgress.catalog(kind).some(i =>
@@ -151,11 +154,7 @@ export class PlayerProgress {
       const product = baitProduct(productId);
       if (!product || product.baseBait !== id || !(this.data.baitProducts[productId] > 0)) return false;
       this.data.baitProducts[productId]--;
-    } else if (this.genericBaitCount(id) <= 0) {
-      const available = BAIT_PRODUCTS.find(p => p.baseBait === id && this.data.baitProducts[p.id] > 0);
-      if (!available) return false;
-      this.data.baitProducts[available.id]--;
-    }
+    } else if (this.genericBaitCount(id) <= 0) return false;
     this.data.baits[id]--;
     if (id === 'chum') this.progressQuest('chum', 1);
     this.save(); return true;
@@ -165,6 +164,18 @@ export class PlayerProgress {
     return kind === 'rod' ? RODS : kind === 'float' ? FLOATS : kind === 'hook' ? HOOKS : kind === 'line' ? LINES
       : kind === 'bait' ? [...BAIT_PACKS, ...BAIT_PRODUCTS] : kind === 'ingredient' ? [...INGREDIENTS] : kind === 'net' ? NETS : KEEPNETS;
   }
+  get shopGoal() {
+    const goal = this.data.shopGoal;
+    if (!goal || this.owns(goal.kind, goal.id)) return undefined;
+    const item = PlayerProgress.catalog(goal.kind).find(i => i.id === goal.id);
+    return item ? { ...item, kind: goal.kind } : undefined;
+  }
+  setShopGoal(kind: ShopKind, id: string) {
+    if (!SHOP_KINDS.includes(kind) || !PlayerProgress.catalog(kind).some(i => i.id === id)) return '상품을 찾을 수 없어요';
+    if (this.owns(kind, id)) return '이미 보유한 장비예요';
+    this.data.shopGoal = { kind, id }; this.save(); return '구매 목표를 정했어요';
+  }
+  clearShopGoal() { delete this.data.shopGoal; this.save(); return '구매 목표를 해제했어요'; }
   /** 한 번 사면 계속 쓰는 장비 */
   owns(kind: ShopKind, id: string) {
     const d = this.data;
@@ -193,6 +204,7 @@ export class PlayerProgress {
     }
     if (kind === 'ingredient' && 'count' in item) d.ingredients[id as IngredientId] += item.count as number;
     if (item.price > 0 && kind !== 'bait' && kind !== 'ingredient') d.stats.equipmentPurchases++;
+    if (d.shopGoal?.kind === kind && d.shopGoal.id === id) delete d.shopGoal;
     this.save(); return `${item.name} 구매 완료`;
   }
   equip(kind: 'net' | 'keepnet', id: string) {

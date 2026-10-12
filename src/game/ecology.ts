@@ -19,7 +19,8 @@ const PRODUCT_TARGETS: Record<string, Partial<Record<SpeciesId, number>>> = {
 export function baitAffinity(sp: Species, bait: BaitId, product?: BaitProduct) {
   const preference = sp.baits[bait];
   // 거의 먹지 않는 곡물 미끼로 포식자를 만능 공략하지 못한다.
-  return preference < 0.06 ? 0 : preference ** 1.8 * (product ? PRODUCT_TARGETS[product.id]?.[sp.id] ?? 1 : 1);
+  const productPreference = product ? product.speciesAffinity?.[sp.id] ?? PRODUCT_TARGETS[product.id]?.[sp.id] ?? 1 : 1;
+  return preference < 0.06 ? 0 : preference ** 1.8 * productPreference;
 }
 export const preferredBaits = (sp: Species) => Object.values(BAITS).sort((a, b) => sp.baits[b.id] - sp.baits[a.id]);
 export const affinityLabel = (n: number) => n >= 1.3 ? '매우 좋아함' : n >= 0.8 ? '좋아함' : n >= 0.3 ? '보통' : n >= 0.08 ? '잘 안 먹음' : '거의 안 먹음';

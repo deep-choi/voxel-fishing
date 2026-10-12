@@ -221,8 +221,8 @@ export class Fishing {
   feed() {
     if (!this.floatInWater || this.floatOnLand || this.phase === 'fighting') return false;
     if (this.progress?.consumeBait && !this.progress.consumeBait('chum', this.chumProduct?.id)) return false;
-    const flavor = this.chumProduct?.id === 'toco-11' ? 'pellet' : this.chumProduct?.id === 'kw-chum' ? 'paste' : undefined;
-    this.grounds.addFeed(this.float.x, this.float.z, 4 * mods.chum * (this.chumProduct?.chumScale ?? 1), flavor);
+    const flavor = this.chumProduct?.chumFlavor ?? (this.chumProduct?.id === 'toco-11' ? 'pellet' : this.chumProduct?.id === 'kw-chum' ? 'paste' : undefined);
+    this.grounds.addFeed(this.float.x, this.float.z, 4 * mods.chum * (this.chumProduct?.chumScale ?? 1), flavor, this.chumProduct?.speciesAffinity);
     this.emit({ type: 'splash', x: this.float.x, z: this.float.z, size: 0.35 });
     this.emit({ type: 'toast', text: '찌 주변에 집어 떡밥을 뿌렸어요', tone: 'good' });
     return true;
@@ -363,7 +363,7 @@ export class Fishing {
     this.measuredDepth = d;
     // 집어: 떡밥을 같은 자리에 던질수록 고기가 모인다
     const chum = BAITS[this.bait].chum * (this.baitProduct?.chumScale ?? 1);
-    if (chum > 0) this.grounds.addFeed(x, z, chum, this.bait);
+    if (chum > 0) this.grounds.addFeed(x, z, chum, this.bait, this.baitProduct?.speciesAffinity);
     this.biteCooldown = this.fastTest ? 0.6 : rand(3, 8);
   }
 
