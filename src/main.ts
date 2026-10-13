@@ -261,6 +261,10 @@ const hud = new Hud(document.getElementById('hud')!, game, player, env, settings
       if (action === 'logout') await service.logout();
       if (action === 'enter') await service.enterFishery();
       if (action === 'nickname') await service.setNickname(value);
+      if (action === 'accept-terms') await service.acceptTerms();
+      if (action === 'unblock') service.unblockUser(value);
+      if (action === 'block') { const target = JSON.parse(value) as { uid: string; nickname: string }; service.blockUser(target.uid, target.nickname); }
+      if (action === 'report') { const target = JSON.parse(value) as { uid: string; nickname: string; messageId: string; reason: string }; if (await service.reportUser(target.uid, target.nickname, target.messageId, target.reason)) hud.toast('신고를 접수했습니다. 운영자가 검토합니다'); }
       if (action === 'send' && await service.sendChat(value)) hud.clearChatDraft();
       if (action === 'view') {
         const view = JSON.parse(value) as { tab: string | null; species: string; scope: string };

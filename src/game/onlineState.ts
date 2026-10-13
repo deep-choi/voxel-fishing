@@ -21,10 +21,11 @@ export interface LocalPlayerPose {
   rodSlots: RemoteRodState[]; heldRod: RemoteHeldRodState | null;
 }
 export interface OnlineState {
+  termsAccepted: boolean; blockedUsers: Record<string, string>;
   uid: string | null; nickname: string; ready: boolean; busy: boolean; error: string;
   messages: ChatMessage[]; rankings: RankingEntry[]; loadingChat: boolean; loadingRanking: boolean;
   admitted: boolean; entering: boolean; admissionError: string;
   fisheryCounts: Partial<Record<FisheryId, number>>;
   players: RemotePlayerState[];
 }
-export const emptyOnlineState = (): OnlineState => ({ uid: null, nickname: '', ready: false, busy: false, error: '', messages: [], rankings: [], loadingChat: false, loadingRanking: false, admitted: false, entering: false, admissionError: '', fisheryCounts: {}, players: [] });
+export const emptyOnlineState = (): OnlineState => ({ termsAccepted: false, blockedUsers: {}, uid: null, nickname: '', ready: false, busy: false, error: '', messages: [], rankings: [], loadingChat: false, loadingRanking: false, admitted: false, entering: false, admissionError: '', fisheryCounts: {}, players: [] });

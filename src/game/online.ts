@@ -1,11 +1,12 @@
 import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut, type User } from 'firebase/auth';
-import { collection, doc, getDoc, limit, onSnapshot, orderBy, query, runTransaction, serverTimestamp, writeBatch, type Timestamp, type Unsubscribe } from 'firebase/firestore';
+import { collection, doc, getDoc, limit, onSnapshot, orderBy, query, runTransaction, serverTimestamp, updateDoc, setDoc, writeBatch, type Timestamp, type Unsubscribe } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { ACTIVE_FISHERY, FISHERIES, type FisheryId } from './fisheries';
 import type { Catch } from './fishing';
 import { SPECIES_LIST, type SpeciesId } from './data';
 import { emptyOnlineState, type LocalPlayerPose, type OnlineState, type OnlineTab, type ChatMessage, type RankingEntry } from './onlineState';
 import { FisheryPresence } from './presence';
+import { COMMUNITY_TERMS_VERSION, readBlockedUsers, saveBlockedUsers } from './community';
 
 const atMillis = (value: unknown) => (value as Timestamp | undefined)?.toMillis?.() ?? 0;
 function message(error: unknown) {
@@ -32,10 +33,15 @@ export class OnlineService {
   private sentAt = 0;
   private listeners = new Set<(state: OnlineState) => void>();
   private readonly presence: FisheryPresence;
+  private rawMessages: ChatMessage[] = [];
+  private rawRankings: RankingEntry[] = [];
+  private rawPlayers: OnlineState['players'] = [];
   constructor() {
     this.presence = new FisheryPresence(state => {
       const changed = this.state.admitted !== state.admitted;
       Object.assign(this.state, state);
+      this.rawPlayers = state.players;
+      this.filterBlocked();
       if (changed) this.listen();
       this.emit();
     });
@@ -43,11 +49,19 @@ export class OnlineService {
   }
   subscribe(fn: (state: OnlineState) => void) { this.listeners.add(fn); fn(this.state); return () => this.listeners.delete(fn); }
   private emit() { this.listeners.forEach(fn => fn(this.state)); }
+  private filterBlocked() {
+    const visible = (entry: { uid: string }) => !Object.hasOwn(this.state.blockedUsers, entry.uid);
+    this.state.messages = this.state.admitted ? this.rawMessages.filter(visible) : [];
+    this.state.rankings = this.rawRankings.filter(visible);
+    this.state.players = this.rawPlayers.filter(visible);
+  }
   private async changedUser(user: User | null) {
     const epoch = ++this.epoch;
     this.profileStop?.(); this.roomStop?.(); this.rankingStop?.();
     this.user = user;
+    this.rawMessages = []; this.rawRankings = []; this.rawPlayers = [];
     Object.assign(this.state, emptyOnlineState(), { uid: user?.uid ?? null, ready: !user });
+    if (user) this.state.blockedUsers = readBlockedUsers(user.uid);
     this.presence.setUser(user?.uid ?? null);
     this.emit();
     if (!user) { this.listen(); return; }
@@ -55,11 +69,12 @@ export class OnlineService {
       if (epoch !== this.epoch) return;
       const before = this.state.nickname;
       this.state.nickname = typeof snapshot.data()?.nickname === 'string' ? snapshot.data()!.nickname : '';
+      this.state.termsAccepted = snapshot.data()?.termsVersion === COMMUNITY_TERMS_VERSION;
       this.state.ready = true; this.state.error = '';
       this.presence.setNickname(this.state.nickname);
       if (before !== this.state.nickname || !this.roomStop) this.listen();
       this.emit();
-      if (this.state.nickname && !this.state.admitted && !this.state.admissionError) void this.enterFishery();
+      if (this.state.nickname && this.state.termsAccepted && !this.state.admitted && !this.state.admissionError) void this.enterFishery();
     }, error => { if (epoch === this.epoch) { this.state.ready = true; this.state.error = message(error); this.emit(); } });
   }
   async login() {
@@ -72,10 +87,49 @@ export class OnlineService {
     finally { this.state.busy = false; this.emit(); }
   }
   async logout() { await this.presence.leave(); await signOut(auth); }
-  async enterFishery() { await this.presence.enter(this.state.nickname); }
+  async enterFishery() {
+    if (!this.state.termsAccepted) { this.state.error = '공개 닉네임과 채팅을 사용하려면 이용 규칙에 동의해 주세요'; this.emit(); return; }
+    await this.presence.enter(this.state.nickname);
+  }
+  async acceptTerms() {
+    if (!this.user || this.state.busy || !this.state.ready) return;
+    this.state.busy = true; this.state.error = ''; this.emit();
+    try {
+      if (this.state.nickname) await updateDoc(doc(db, 'players', this.user.uid), { termsVersion: COMMUNITY_TERMS_VERSION, termsAcceptedAt: serverTimestamp(), updatedAt: serverTimestamp() });
+      this.state.termsAccepted = true;
+    } catch (error) { this.state.error = message(error); }
+    finally { this.state.busy = false; this.emit(); }
+    if (this.state.termsAccepted && this.state.nickname) await this.enterFishery();
+  }
+  blockUser(uid: string, nickname: string) {
+    if (!this.user || uid === this.user.uid || !uid) return;
+    const next = { ...this.state.blockedUsers, [uid]: nickname };
+    try { saveBlockedUsers(this.user.uid, next); }
+    catch { this.state.error = '차단 목록을 저장하지 못했습니다. 기기 저장 공간을 확인해 주세요'; this.emit(); return; }
+    this.state.blockedUsers = next; this.filterBlocked(); this.emit();
+  }
+  unblockUser(uid: string) {
+    if (!this.user) return;
+    const next = { ...this.state.blockedUsers }; delete next[uid];
+    try { saveBlockedUsers(this.user.uid, next); }
+    catch { this.state.error = '차단 목록을 저장하지 못했습니다'; this.emit(); return; }
+    this.state.blockedUsers = next; this.filterBlocked(); this.emit();
+  }
+  async reportUser(uid: string, nickname: string, messageId: string, reason: string) {
+    if (!this.user || this.state.busy || uid === this.user.uid || !reason.trim()) return false;
+    this.state.busy = true; this.state.error = ''; this.emit();
+    try {
+      // 같은 이용자가 같은 게시물을 반복 신고해 문서를 늘릴 수 없도록 결정적인 ID를 사용한다.
+      const id = `${this.user.uid}_${uid}_${messageId || 'profile'}`;
+      await setDoc(doc(db, 'reports', id), { reporterUid: this.user.uid, targetUid: uid, targetNickname: nickname, map: ACTIVE_FISHERY.id, messageId, reason: reason.trim().slice(0, 500), createdAt: serverTimestamp() });
+      return true;
+    } catch (error) { this.state.error = message(error); return false; }
+    finally { this.state.busy = false; this.emit(); }
+  }
   updatePlayerPose(pose: LocalPlayerPose) { this.presence.updatePose(pose); }
   async setNickname(raw: string) {
     if (!this.user || this.state.busy) return;
+    if (!this.state.termsAccepted) { this.state.error = '닉네임을 공개하기 전에 이용 규칙에 동의해 주세요'; this.emit(); return; }
     const nickname = raw.trim().normalize('NFC');
     if (!/^[가-힣a-zA-Z0-9_]{2,12}$/.test(nickname)) { this.state.error = '닉네임은 한글·영문·숫자·밑줄 2~12자로 입력하세요'; this.emit(); return; }
     const user = this.user, key = nickname.toLowerCase();
@@ -89,6 +143,7 @@ export class OnlineService {
         if (oldKey && oldKey !== key) tx.delete(doc(db, 'nicknames', oldKey));
         tx.set(handleRef, { uid: user.uid, nickname });
         tx.set(playerRef, { uid: user.uid, nickname, nicknameKey: key, updatedAt: serverTimestamp(),
+          termsVersion: COMMUNITY_TERMS_VERSION, ...(player.data()?.termsVersion === COMMUNITY_TERMS_VERSION ? {} : { termsAcceptedAt: serverTimestamp() }),
           ...(player.exists() ? {} : { createdAt: serverTimestamp() }) }, { merge: true });
       });
       this.state.nickname = nickname;
@@ -119,14 +174,16 @@ export class OnlineService {
     if (!this.roomStop && this.state.admitted && this.user && this.state.nickname) {
       this.state.loadingChat = true;
       this.roomStop = onSnapshot(query(collection(db, 'rooms', ACTIVE_FISHERY.id, 'messages'), orderBy('createdAt', 'desc'), limit(50)), snapshot => {
-        this.state.messages = snapshot.docs.map(d => ({ id: d.id, ...d.data(), at: atMillis(d.data().createdAt) }) as ChatMessage).reverse();
+        this.rawMessages = snapshot.docs.map(d => ({ id: d.id, ...d.data(), at: atMillis(d.data().createdAt) }) as ChatMessage).reverse();
+        this.filterBlocked();
         this.state.loadingChat = false; this.emit();
       }, error => { this.state.loadingChat = false; this.state.error = message(error); this.emit(); });
     }
     if (this.viewed === 'ranking') {
       this.state.loadingRanking = true;
       this.rankingStop = onSnapshot(query(collection(db, 'leaderboards', this.scope, 'species', this.species, 'entries'), orderBy('cm', 'desc'), limit(20)), snapshot => {
-        this.state.rankings = snapshot.docs.map(d => ({ uid: d.id, ...d.data(), at: atMillis(d.data().updatedAt) }) as RankingEntry);
+        this.rawRankings = snapshot.docs.map(d => ({ uid: d.id, ...d.data(), at: atMillis(d.data().updatedAt) }) as RankingEntry);
+        this.filterBlocked();
         this.state.loadingRanking = false; this.emit();
       }, error => { this.state.loadingRanking = false; this.state.error = message(error); this.emit(); });
     }
@@ -135,6 +192,7 @@ export class OnlineService {
   async sendChat(raw: string) {
     const membership = this.presence.membership();
     if (!this.user || !this.state.nickname || this.state.busy || !membership) return false;
+    if (!this.state.termsAccepted) return false;
     const text = raw.trim();
     if (!text || text.length > 200) { this.state.error = '채팅은 1~200자로 입력하세요'; this.emit(); return false; }
     if (!navigator.onLine) { this.state.error = '인터넷 연결을 확인해 주세요'; this.emit(); return false; }

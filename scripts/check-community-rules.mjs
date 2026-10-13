@@ -1,0 +1,36 @@
+import assert from 'node:assert/strict';
+const project = 'demo-fishing-community';
+const host = process.env.FIRESTORE_EMULATOR_HOST;
+if (!host || !/^127\.0\.0\.1:\d+$/.test(host)) throw new Error('A local Firestore emulator is required.');
+const base = `http://${host}/v1/projects/${project}/databases/(default)/documents`;
+const name = path => `projects/${project}/databases/(default)/documents/${path}`;
+const token = uid => `${Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString('base64url')}.${Buffer.from(JSON.stringify({ sub: uid, user_id: uid, iss: `https://securetoken.google.com/${project}`, aud: project, iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 3600, firebase: { sign_in_provider: 'google.com' } })).toString('base64url')}.`;
+const field = value => typeof value === 'string' ? { stringValue: value } : typeof value === 'number' ? { integerValue: String(value) } : value;
+const fields = data => Object.fromEntries(Object.entries(data).map(([key, value]) => [key, field(value)]));
+const write = (path, data, timestamps = [], merge = false) => ({ update: { name: name(path), fields: fields(data) }, ...(merge ? { updateMask: { fieldPaths: [...Object.keys(data), ...timestamps] } } : {}), ...(timestamps.length ? { updateTransforms: timestamps.map(fieldPath => ({ fieldPath, setToServerValue: 'REQUEST_TIME' })) } : {}) });
+async function commit(uid, writes, allowed = true) {
+  const response = await fetch(`${base}:commit`, { method: 'POST', headers: { Authorization: `Bearer ${uid === 'owner' ? 'owner' : token(uid)}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ writes }) });
+  const text = await response.text();
+  assert.equal(response.ok, allowed, `Expected ${allowed ? 'allowed' : 'denied'}: ${text}`);
+  if (!allowed) assert.equal(response.status, 403, text);
+}
+const profile = (uid, terms) => write(`players/${uid}`, { uid, nickname: uid, nicknameKey: uid, ...(terms ? { termsVersion: '2026-10-13' } : {}) }, ['createdAt', 'updatedAt', ...(terms ? ['termsAcceptedAt'] : [])]);
+const handle = uid => write(`nicknames/${uid}`, { uid, nickname: uid });
+await commit('alice', [profile('alice', false), handle('alice')], false);
+await commit('alice', [profile('alice', true), handle('alice')]);
+await commit('owner', [profile('bob', false), handle('bob'), write('rooms/willow/messages/m1', { uid: 'bob', nickname: 'bob', text: 'test' }, ['createdAt'])]);
+await commit('bob', [write('players/bob', { termsVersion: '2026-10-13' }, ['termsAcceptedAt', 'updatedAt'], true)]);
+const report = (reporterUid = 'alice', targetUid = 'bob', messageId = 'm1') => write(`reports/alice_${targetUid}_${messageId}`, { reporterUid, targetUid, targetNickname: 'bob', map: 'willow', messageId, reason: 'harassment' }, ['createdAt']);
+await commit('alice', [report('bob')], false);
+await commit('alice', [report('alice', 'missing')], false);
+await commit('alice', [report()]);
+await commit('alice', [report()], false);
+let response = await fetch(`${base}/reports/alice_bob_m1`, { headers: { Authorization: `Bearer ${token('alice')}` } });
+assert.equal(response.status, 403, 'Reports must remain private even to their creator.');
+await commit('alice', [write('players/bob', { nickname: 'stolen' }, ['updatedAt'], true)], false);
+const sessionId = '12345678-1234-1234-1234-123456789012';
+await commit('alice', [write('presence/willow/slots/0', { uid: 'alice', nickname: 'alice', sessionId }, ['updatedAt'])]);
+await commit('owner', [profile('carol', false), handle('carol')]);
+await commit('carol', [write('presence/willow/slots/1', { uid: 'carol', nickname: 'carol', sessionId }, ['updatedAt'])], false);
+await commit('alice', [write('rooms/willow/messages/m2', { uid: 'alice', nickname: 'alice', text: 'hello', slotId: '0', sessionId }, ['createdAt']), write('players/alice', { lastMessageId: 'm2' }, ['lastChatAt', 'updatedAt'], true)]);
+console.log('PASS: terms gate, legacy consent migration, private reports, spoof rejection, duplicate rejection, owner boundaries and valid chat.');

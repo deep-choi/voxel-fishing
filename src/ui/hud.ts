@@ -170,6 +170,14 @@ export class Hud {
       case 'online-login': this.h.online('login'); break;
       case 'online-logout': this.h.online('logout'); break;
       case 'online-nickname': this.h.online('nickname', this.ui.nicknameDraft || this.online.nickname); break;
+      case 'online-accept-terms': this.h.online('accept-terms'); break;
+      case 'online-unblock': this.h.online('unblock', id); break;
+      case 'online-block': this.h.online('block', JSON.stringify({ uid: id, nickname: t.dataset.nickname ?? '' })); break;
+      case 'online-report': {
+        const reason = window.prompt('신고 사유를 입력해 주세요. 선택한 내용과 이용자를 운영자에게 신고합니다.');
+        if (reason?.trim()) this.h.online('report', JSON.stringify({ uid: id, nickname: t.dataset.nickname ?? '', messageId: t.dataset.message ?? '', reason }));
+        break;
+      }
       case 'online-send': this.h.online('send', this.ui.chatDraft); break;
       case 'chat-focus': this.focusChat(); break;
       case 'chat-fold':
@@ -331,7 +339,7 @@ export class Hud {
         this.modal = 'none'; this.el.start.hidden = false;
         this.renderModal(); this.syncOnlineView();
       }
-      if (!state.nickname && this.modal !== 'account') this.open('account');
+      if ((!state.nickname || !state.termsAccepted) && this.modal !== 'account') this.open('account');
     }
     if (!['account', 'onlineRanking'].includes(this.modal)) return;
     const input = document.activeElement instanceof HTMLInputElement ? document.activeElement : null;

@@ -98,7 +98,10 @@ function onlinePanel(c: PanelCtx, tab: Exclude<OnlineTab, 'chat'>) {
   if (tab === 'account') {
     body = !s.ready ? '<p class="empty">계정을 연결하고 있어요…</p>' : s.uid ? `<p class="online-name">${s.nickname ? esc(s.nickname) : '닉네임을 정해 주세요'}</p>
       <label class="online-field">닉네임<input id="nickname-input" data-act="nickname-draft" aria-label="닉네임" value="${esc(ui.nicknameDraft || s.nickname)}" maxlength="12" autocomplete="off" placeholder="한글·영문·숫자·밑줄 2~12자"></label>
-      <div class="row"><button class="btn primary" data-act="online-nickname" ${s.busy ? 'disabled' : ''}>${s.busy ? '저장 중…' : '닉네임 저장'}</button><button class="btn" data-act="online-logout" ${s.busy ? 'disabled' : ''}>로그아웃</button></div>`
+      ${!s.termsAccepted ? '<p><a href="/terms/" target="_blank" rel="noopener noreferrer">커뮤니티 이용 규칙</a>에서 금지 내용과 신고·차단 방법을 확인해 주세요.</p><button class="btn" data-act="online-accept-terms">이용 규칙에 동의</button>' : '<p class="depth-note">커뮤니티 이용 규칙에 동의했습니다.</p>'}
+      <div class="row"><button class="btn primary" data-act="online-nickname" ${s.busy || !s.termsAccepted ? 'disabled' : ''}>${s.busy ? '저장 중…' : '닉네임 저장'}</button><button class="btn" data-act="online-logout" ${s.busy ? 'disabled' : ''}>로그아웃</button></div>
+      <p><a href="/account-deletion/" target="_blank" rel="noopener noreferrer">계정 삭제 요청</a></p>
+      ${Object.keys(s.blockedUsers).length ? `<h3>차단한 이용자</h3>${Object.entries(s.blockedUsers).map(([uid, name]) => `<p>${esc(name)} <button class="btn small" data-act="online-unblock" data-id="${esc(uid)}">차단 해제</button></p>`).join('')}` : ''}`
       : `<p class="empty">구글 계정으로 로그인하고 나만의 닉네임을 정하세요.</p>${login}`;
   }
   if (tab === 'ranking') {
@@ -108,15 +111,16 @@ function onlinePanel(c: PanelCtx, tab: Exclude<OnlineTab, 'chat'>) {
       ${s.loadingRanking ? '<p class="empty">랭킹을 불러오는 중…</p>' : s.rankings.length ? `<ol class="online-ranking">${s.rankings.map((r, i) => `<li class="${r.uid === s.uid ? 'me' : ''}"><span>${i + 1}</span><b>${esc(r.nickname)}</b><strong>${r.cm.toFixed(1)}cm</strong><small>${sizeRankBadge(ui.onlineSpecies, r.cm)} ${kgText(r.kg)} · ${(findFishery(r.fisheryId) ?? FISHERIES[0]).name}</small></li>`).join('')}</ol>` : '<p class="empty">아직 등록된 기록이 없어요.</p>'}`;
   }
   return `<div class="panel ${tab === 'ranking' ? 'wide' : ''} online-panel"><h2>${tab === 'account' ? '계정' : '온라인 최대어 랭킹'}</h2>
-    ${s.error ? `<p class="warn" role="alert">${esc(s.error)}</p>` : ''}${body}</div>`;
+    ${s.error ? `<p class="warn" role="alert">${esc(s.error)}</p>` : ''}${body}<p class="community-links"><a href="/privacy/" target="_blank" rel="noopener noreferrer">개인정보처리방침</a> · <a href="/terms/" target="_blank" rel="noopener noreferrer">이용 규칙</a></p></div>`;
 }
 export const accountPanel = (c: PanelCtx) => onlinePanel(c, 'account');
 export const onlineRankingPanel = (c: PanelCtx) => onlinePanel(c, 'ranking');
 export function dockMessages(state: OnlineState) {
+  const actions = (m: OnlineState['messages'][number]) => m.uid === state.uid ? '' : `<span class="community-actions"><button aria-label="${esc(m.nickname)} 신고" data-act="online-report" data-id="${esc(m.uid)}" data-nickname="${esc(m.nickname)}" data-message="${esc(m.id)}">신고</button><button aria-label="${esc(m.nickname)} 차단" data-act="online-block" data-id="${esc(m.uid)}" data-nickname="${esc(m.nickname)}">차단</button></span>`;
   return state.loadingChat ? '<p class="chat-hint">채팅을 불러오는 중…</p>' : state.messages.length
     ? state.messages.map(m => m.kind === 'catch'
-      ? `<div class="dock-message catch-log ${m.uid === state.uid ? 'mine' : ''}"><small class="catch-log-label">조과</small><b>${esc(m.nickname)}</b><span>${esc(SPECIES[m.speciesId].name)} · ${m.cm.toFixed(1)}cm · ${m.kg.toFixed(3)}kg</span></div>`
-      : `<div class="dock-message ${m.uid === state.uid ? 'mine' : ''}"><b>${esc(m.nickname)}</b><span>${esc(m.text)}</span></div>`).join('')
+      ? `<div class="dock-message catch-log ${m.uid === state.uid ? 'mine' : ''}"><small class="catch-log-label">조과</small><b>${esc(m.nickname)}</b><span>${esc(SPECIES[m.speciesId].name)} · ${m.cm.toFixed(1)}cm · ${m.kg.toFixed(3)}kg</span>${actions(m)}</div>`
+      : `<div class="dock-message ${m.uid === state.uid ? 'mine' : ''}"><b>${esc(m.nickname)}</b><span>${esc(m.text)}</span>${actions(m)}</div>`).join('')
     : '<p class="chat-hint">Enter로 첫 인사를 남겨 보세요</p>';
 }
 

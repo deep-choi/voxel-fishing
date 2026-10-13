@@ -13,6 +13,9 @@
 .online-ranking small { grid-column: 2 / -1; font-size: 10px; color: var(--dim); }
 .online-ranking .me { background: #74a97822; }
 .online-panel .warn { overflow-wrap: anywhere; }
+.community-links { font-size: 12px; }
+.community-actions { display: inline-flex; flex: 0 0 auto; gap: 2px; }
+.lakeside-chat .community-actions button { padding: 4px; font-size: 10px; }
 
 /* 물가를 가리지 않는 왼쪽 아래 채팅. 입력할 때만 배경을 진하게 한다. */
 .lakeside-chat { position: absolute; left: 24px; bottom: 32px; width: min(560px, calc(50vw - 70px)); min-width: 240px; max-width: calc(100vw - 32px); color: #f2f1df; background: #101b2270; border: 2px solid #a2ad8070; text-shadow: 1px 1px #000; pointer-events: auto; }
