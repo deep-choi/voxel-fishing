@@ -258,6 +258,7 @@ const hud = new Hud(document.getElementById('hud')!, game, player, env, settings
   online(action, value = '') {
     void connectOnline().then(async service => {
       if (action === 'login') await service.login();
+      if (action === 'review-login') { const credentials = JSON.parse(value); await service.loginReview(credentials.email, credentials.password); }
       if (action === 'logout') await service.logout();
       if (action === 'enter') await service.enterFishery();
       if (action === 'nickname') await service.setNickname(value);

@@ -99,6 +99,7 @@ export class Hud {
     <h1>좌대 낚시</h1>
     <p class="lead">구글 계정으로 로그인하면 ${ACTIVE_FISHERY.name}에서 바로 시작해요.</p>
     <button class="btn primary" data-act="start" data-ref="entry" disabled>계정 확인 중…</button>
+    <button class="btn small start-account" data-act="menu" data-id="account">심사용 로그인</button>
     <p class="admission-note" data-ref="admission" role="alert" hidden></p>
     <p class="admission-note" data-ref="loginError" role="alert" hidden></p>
     <button class="btn small start-account" data-act="menu" data-id="account" data-ref="onlineEntry" hidden>계정 · 닉네임</button>
@@ -168,6 +169,16 @@ export class Hud {
       case 'travel': this.h.travel(Number(id)); break;
       case 'fishery': this.h.fishery(id); break;
       case 'online-login': this.h.online('login'); break;
+      case 'online-review-login': {
+        const email = this.root.querySelector<HTMLInputElement>('#review-email');
+        const password = this.root.querySelector<HTMLInputElement>('#review-password');
+        if (email && password) {
+          const credentials = JSON.stringify({ email: email.value, password: password.value });
+          password.value = '';
+          this.h.online('review-login', credentials);
+        }
+        break;
+      }
       case 'online-logout': this.h.online('logout'); break;
       case 'online-nickname': this.h.online('nickname', this.ui.nicknameDraft || this.online.nickname); break;
       case 'online-accept-terms': this.h.online('accept-terms'); break;

@@ -1,4 +1,4 @@
-import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut, type User } from 'firebase/auth';
+import { GoogleAuthProvider, onAuthStateChanged, signInWithEmailAndPassword, signInWithPopup, signOut, type User } from 'firebase/auth';
 import { collection, doc, getDoc, limit, onSnapshot, orderBy, query, runTransaction, serverTimestamp, updateDoc, setDoc, writeBatch, type Timestamp, type Unsubscribe } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { ACTIVE_FISHERY, FISHERIES, type FisheryId } from './fisheries';
@@ -58,6 +58,19 @@ export class OnlineService {
   private async changedUser(user: User | null) {
     const epoch = ++this.epoch;
     this.profileStop?.(); this.roomStop?.(); this.rankingStop?.();
+    if (user?.providerData.some(provider => provider.providerId === 'password')) {
+      try {
+        const token = await user.getIdTokenResult();
+        if (epoch !== this.epoch) return;
+        if (token.claims.playReview !== true) {
+          await signOut(auth);
+          this.state.error = '심사용으로 등록된 계정만 사용할 수 있어요'; this.emit(); return;
+        }
+      } catch {
+        if (epoch === this.epoch) { await signOut(auth); this.state.error = '계정 권한을 확인하지 못했어요'; this.emit(); }
+        return;
+      }
+    }
     this.user = user;
     this.rawMessages = []; this.rawRankings = []; this.rawPlayers = [];
     Object.assign(this.state, emptyOnlineState(), { uid: user?.uid ?? null, ready: !user });
@@ -87,6 +100,18 @@ export class OnlineService {
     finally { this.state.busy = false; this.emit(); }
   }
   async logout() { await this.presence.leave(); await signOut(auth); }
+  async loginReview(email: string, password: string) {
+    if (this.state.busy) return;
+    this.state.busy = true; this.state.error = ''; this.emit();
+    try {
+      if (!email.trim() || !password || email.length > 254 || password.length > 256) throw new Error('이메일과 비밀번호를 입력해 주세요');
+      const result = await signInWithEmailAndPassword(auth, email.trim(), password);
+      if ((await result.user.getIdTokenResult()).claims.playReview !== true) {
+        await signOut(auth); throw new Error('심사용으로 등록된 계정만 사용할 수 있어요');
+      }
+    } catch (error) { this.state.error = message(error); }
+    finally { this.state.busy = false; this.emit(); }
+  }
   async enterFishery() {
     if (!this.state.termsAccepted) { this.state.error = '공개 닉네임과 채팅을 사용하려면 이용 규칙에 동의해 주세요'; this.emit(); return; }
     await this.presence.enter(this.state.nickname);

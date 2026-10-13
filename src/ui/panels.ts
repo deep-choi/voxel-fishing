@@ -102,7 +102,12 @@ function onlinePanel(c: PanelCtx, tab: Exclude<OnlineTab, 'chat'>) {
       <div class="row"><button class="btn primary" data-act="online-nickname" ${s.busy || !s.termsAccepted ? 'disabled' : ''}>${s.busy ? '저장 중…' : '닉네임 저장'}</button><button class="btn" data-act="online-logout" ${s.busy ? 'disabled' : ''}>로그아웃</button></div>
       <p><a href="/account-deletion/" target="_blank" rel="noopener noreferrer">계정 삭제 요청</a></p>
       ${Object.keys(s.blockedUsers).length ? `<h3>차단한 이용자</h3>${Object.entries(s.blockedUsers).map(([uid, name]) => `<p>${esc(name)} <button class="btn small" data-act="online-unblock" data-id="${esc(uid)}">차단 해제</button></p>`).join('')}` : ''}`
-      : `<p class="empty">구글 계정으로 로그인하고 나만의 닉네임을 정하세요.</p>${login}`;
+      : `<p class="empty">구글 계정으로 로그인하고 나만의 닉네임을 정하세요.</p>${login}
+        <details><summary>심사용 로그인</summary>
+          <label class="online-field">이메일<input id="review-email" type="email" aria-label="심사용 이메일" autocomplete="username"></label>
+          <label class="online-field">비밀번호<input id="review-password" type="password" aria-label="심사용 비밀번호" autocomplete="current-password"></label>
+          <button class="btn" data-act="online-review-login" ${s.busy ? 'disabled' : ''}>심사 계정 로그인</button>
+        </details>`;
   }
   if (tab === 'ranking') {
     body = `${tabs('online-scope', ui.onlineScope, [['all', '전체 낚시터'], [ACTIVE_FISHERY.id, ACTIVE_FISHERY.name]])}
