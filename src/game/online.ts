@@ -62,7 +62,8 @@ export class OnlineService {
       try {
         const token = await user.getIdTokenResult();
         if (epoch !== this.epoch) return;
-        if (token.claims.playReview !== true) {
+        const provider = (token.claims.firebase as { sign_in_provider?: string } | undefined)?.sign_in_provider;
+        if (provider === 'password' && token.claims.playReview !== true) {
           await signOut(auth);
           this.state.error = '심사용으로 등록된 계정만 사용할 수 있어요'; this.emit(); return;
         }
