@@ -1,5 +1,6 @@
 import type { BaitId, SpeciesId } from './data';
 import { createHouseBaits } from './baitExpansion';
+import { applyFictionalProductName } from './fictionalBrands';
 
 /** 실제 모델의 조사 자료. 가격·해금·하중·입질 배율은 별도의 게임 수치다. */
 export const BRANDS = {
@@ -66,30 +67,33 @@ for (const id of ['medium', 'large', 'monster', 'ise5', 'ise9']) PRODUCT_INFO[`h
 export const catalogInfo = (kind: string, id: string) => PRODUCT_INFO[`${kind}:${id}`];
 
 export interface BaitProduct extends Partial<ProductInfo> {
-  id: string; name: string; baseBait: BaitId | 'chum'; count: number; price: number; level: number; desc: string;
+  id: string; name: string; baseBait: BaitId; count: number; price: number; level: number; desc: string;
   /** 자체 상품에는 실존 브랜드나 출처 링크를 붙이지 않는다. */
   origin?: 'house'; qualityTier?: 1 | 2 | 3 | 4 | 5; purpose?: string;
   speciesAffinity?: Partial<Record<SpeciesId, number>>;
-  chumFlavor?: BaitId;
   /** 실제 제품의 효능 수치가 아니라 게임에서 제품을 구별하는 배율 */
   biteScale: number; chumScale: number;
+  /** 사용자가 배합한 떡밥의 게임 선호도와 결합력. */
+  blendPreferences?: Partial<Record<SpeciesId, number>>;
+  holdingScale?: number;
 }
 export const BAIT_PRODUCTS: BaitProduct[] = [
   { ...retailer('kyongwon', SOURCES.kw, '찐버거 · 국내 판매 제품명 확인'), id: 'kw-burger', name: '경원 찐버거', baseBait: 'paste', count: 20, price: 80, level: 1, desc: '붕어용 곡물 계열 바늘 떡밥', biteScale: 1.06, chumScale: 1.1 },
   { ...retailer('kyongwon', SOURCES.kw, '아쿠아텍II · 국내 판매 제품명 확인'), id: 'kw-aqua2', name: '경원 아쿠아텍2', baseBait: 'pellet', count: 20, price: 100, level: 1, desc: '잉어·향어 공략용 어분 계열 떡밥', biteScale: 1.08, chumScale: 1.2 },
-  { ...retailer('kyongwon', SOURCES.kwRecipe, '아쿠아텍2·찐버거1 혼합 판매 구성 · 혼합 비율은 게임용'), id: 'kw-chum', name: '경원 아쿠아텍2·찐버거 배합', baseBait: 'chum', count: 10, price: 110, level: 1, desc: '찌 주변에 뿌리는 배합 집어 떡밥', biteScale: 1, chumScale: 1.15 },
+  { ...retailer('kyongwon', SOURCES.kwRecipe, '아쿠아텍2·찐버거1 혼합 판매 구성 · 혼합 비율은 게임용'), id: 'kw-chum', name: '경원 아쿠아텍2·찐버거 배합', baseBait: 'paste', count: 10, price: 110, level: 1, desc: '바늘에 다는 곡물·어분 배합 떡밥', biteScale: 1, chumScale: 1.15 },
   { ...retailer('toco', SOURCES.toco, '어분글루텐 · 판매 표기 300g'), id: 'toco-fish', name: '토코 어분글루텐', baseBait: 'gluten', count: 20, price: 110, level: 1, desc: '글루텐 결합력에 어분 향을 더한 바늘 떡밥', biteScale: 1.1, chumScale: 1.15 },
   { ...retailer('toco', SOURCES.tocoVanilla, '바닐라 어분글루텐 · 국내 판매 제품명 확인'), id: 'toco-vanilla', name: '토코 바닐라 어분글루텐', baseBait: 'gluten', count: 20, price: 130, level: 2, desc: '향을 달리해 붕어를 노리는 글루텐 떡밥', biteScale: 1.15, chumScale: 1.1 },
-  { ...retailer('toco', SOURCES.toco11, '토코텍11 핑크 어분 · 판매 표기 400g'), id: 'toco-11', name: '토코 토코텍11', baseBait: 'chum', count: 10, price: 120, level: 2, desc: '붕어·잉어·향어용 어분 집어 떡밥', biteScale: 1, chumScale: 1.3 },
+  { ...retailer('toco', SOURCES.toco11, '토코텍11 핑크 어분 · 판매 표기 400g'), id: 'toco-11', name: '토코 토코텍11', baseBait: 'pellet', count: 10, price: 120, level: 2, desc: '붕어·잉어·향어용 바늘 어분 떡밥', biteScale: 1, chumScale: 1.3 },
   { ...official('marukyu', SOURCES.wata, 'わたグル · 물속에서 솜처럼 부풀며 바늘에 잔존'), id: 'mq-wata', name: '마루큐 와타글루', baseBait: 'gluten', count: 20, price: 120, level: 1, desc: '바늘에 남는 글루텐 섬유로 붕어 입질을 기다린다', biteScale: 1.12, chumScale: 1 },
   { ...official('marukyu', SOURCES.nogluten, '野釣りグルテン · 고구마 매시, 아미노산·마늘 성분'), id: 'mq-nozuri', name: '마루큐 노즈리 글루텐', baseBait: 'gluten', count: 20, price: 140, level: 2, desc: '노지 붕어의 바닥낚시용 글루텐 떡밥', biteScale: 1.16, chumScale: 1.2 },
   { ...official('marukyu', SOURCES.imo, 'いもグルテン · 제조사 내용량 250g'), id: 'mq-imo', name: '마루큐 이모글루텐', baseBait: 'gluten', count: 20, price: 100, level: 1, desc: '바닥 자리에서 붕어를 노리는 글루텐 떡밥', biteScale: 1.08, chumScale: 1.05 },
   { ...official('marukyu', SOURCES.a21, 'グルテンα21 · 가벼운 에사, 오래 기다리는 낚시용'), id: 'mq-alpha21', name: '마루큐 글루텐 α21', baseBait: 'gluten', count: 20, price: 160, level: 3, desc: '예민한 붕어용 가벼운 글루텐 떡밥', biteScale: 1.2, chumScale: 0.95 },
   { ...official('marukyu', SOURCES.koi, '大ごい · 실제 포장 300g / 덕용 1,000g · 잉어 찌낚시 겸용'), id: 'mq-ookoi', name: '마루큐 오끼고이', baseBait: 'pellet', count: 20, price: 140, level: 2, desc: '잉어용 배합 떡밥. 게임에서는 어분 계열로 사용', biteScale: 1.18, chumScale: 1.25 },
 ];
-BAIT_PRODUCTS.find(p => p.id === 'kw-chum')!.chumFlavor = 'paste';
-BAIT_PRODUCTS.find(p => p.id === 'toco-11')!.chumFlavor = 'pellet';
+/** 예전 던지는 떡밥 재고를 바늘용으로 옮길 때만 쓰는 저장 ID. */
+export const LEGACY_CHUM_PRODUCTS = new Set(['kw-chum', 'toco-11', ...Array.from({ length: 5 }, (_, i) => `house-chum-${i + 1}`)]);
 BAIT_PRODUCTS.push(...createHouseBaits());
+for (const product of BAIT_PRODUCTS) applyFictionalProductName('bait', product);
 export const baitProduct = (id?: string) => BAIT_PRODUCTS.find(p => p.id === id);
 for (const p of BAIT_PRODUCTS) if (p.brand && p.source && p.sourceKind && p.facts) {
   PRODUCT_INFO[`bait:${p.id}`] = { brand: p.brand, source: p.source, sourceKind: p.sourceKind, facts: p.facts };

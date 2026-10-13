@@ -23,6 +23,7 @@ body.touch #hud button { touch-action: manipulation; }
 /* 키보드 안내는 터치에서 숨긴다 */
 body.touch :is(.hot > kbd, .hub-tile kbd, .btn kbd, .catch-card kbd) { display: none; }
 body.touch .prompt { display: none; }
+body.touch .key-hint { display: none; }
 .keys-touch, .help-touch { display: none; }
 body.touch .keys-desk, body.touch .help-desk { display: none; }
 body.touch .keys-touch, body.touch .help-touch { display: block; }

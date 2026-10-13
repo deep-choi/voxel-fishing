@@ -8,6 +8,7 @@ import { SPECIES_RULES } from '../game/items';
 import type { PlayerProgress, ShopKind } from '../game/profile';
 import type { SkillId } from '../game/skills';
 import type { Tournament } from '../game/tournament';
+import type { FeedDraft } from '../game/feedMixing';
 import * as P from './panels';
 import { fishIcon, itemIcon } from './pixelIcons';
 import type { Settings } from './settings';
@@ -42,13 +43,12 @@ export interface HudHandlers {
   /** 어시장에서 한 마리 판매 */
   sellOne(id: string): void;
   gather(): void;
-  craft(id: string): void;
+  craft(draft: FeedDraft): boolean;
   take(number: number): void;
   /** 가방에서 낚싯대를 꺼내 지금 좌대의 빈 자리에 든다 */
   deploy(rodId: string): void;
   /** 펼친 낚싯대를 거둬 가방에 넣는다 */
   recall(slotId: string): void;
-  feed(): void;
   equip(kind: 'net' | 'keepnet', id: string): void;
   repair(key: string): void;
   learn(id: SkillId): void;
@@ -64,7 +64,7 @@ export interface HudHandlers {
 /** 살림망 게이지 가운데 물고기 모양 */
 const FISH_GLYPH = '<svg viewBox="0 0 24 14" aria-hidden="true"><path d="M2 7c4-6 12-6 16 0-4 6-12 6-16 0z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M18 7l5-4v8z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="6.5" cy="6" r="1.1" fill="currentColor"/></svg>';
 
-export type Modal = 'none' | 'account' | 'onlineRanking' | 'setup' | 'keepnet' | 'pause' | 'platforms' | 'shop' | 'market' | 'collection' | 'records' | 'inventory' | 'quests' | 'skills' | 'tournament' | 'settings';
+export type Modal = 'none' | 'account' | 'onlineRanking' | 'setup' | 'keepnet' | 'pause' | 'shop' | 'market' | 'collection' | 'records' | 'inventory' | 'crafting' | 'quests' | 'skills' | 'tournament' | 'settings';
 export type MenuModal = Exclude<Modal, 'none' | 'pause'>;
 
 export class Hud {
@@ -72,6 +72,7 @@ export class Hud {
   started = false;
   chatting = false;
   private chatFolded = false;
+  private touchHints: boolean | null = null;
   private readonly el: Record<string, HTMLElement> = {};
   private last: Record<string, string> = {};
   private platforms: P.PlatformStatus[] = [];
@@ -80,7 +81,7 @@ export class Hud {
   private rodSlots: P.RodStatus[] = [];
   private tournament: Tournament | null = null;
   private online = emptyOnlineState();
-  private readonly ui: P.UiState = { inventoryTab: 'all', invSelected: null, shopTab: 'bait', shopQuality: 0, shopAffordable: false, rigStep: 'rod', rigTarget: null, recordSpecies: 'crucian', weekly: false, questTab: 'personal', goalGroup: 'start', resetArmed: false, onlineSpecies: 'crucian', onlineScope: 'all', nicknameDraft: '', chatDraft: '' };
+  private readonly ui: P.UiState = { inventoryTab: 'all', invSelected: null, feedDraft: { name: '', parts: [] }, feedFilter: 'all', feedView: 'list', shopTab: 'bait', shopModel: null, shopBrand: null, shopQuality: 0, shopAffordable: false, rigStep: 'rod', rigTarget: null, recordSpecies: 'crucian', weekly: false, questTab: 'personal', goalGroup: 'start', resetArmed: false, onlineSpecies: 'crucian', onlineScope: 'all', nicknameDraft: '', chatDraft: '' };
 
   constructor(
     private readonly root: HTMLElement,
@@ -101,7 +102,7 @@ export class Hud {
     <p class="admission-note" data-ref="admission" role="alert" hidden></p>
     <p class="admission-note" data-ref="loginError" role="alert" hidden></p>
     <button class="btn small start-account" data-act="menu" data-id="account" data-ref="onlineEntry" hidden>계정 · 닉네임</button>
-    <p class="tip">조작법은 게임 안 메뉴(☰ · Esc)에서 볼 수 있어요</p>
+    <p class="tip">조작법은 게임 안 메뉴(☰)에서 볼 수 있어요</p>
   </div>
 </div>
 <div class="rotate-note"><b>화면을 가로로 돌려 주세요</b><small>낚시는 가로 화면에서 즐길 수 있어요</small></div>
@@ -129,8 +130,8 @@ export class Hud {
   <header><button class="chat-title" data-act="chat-focus">${ACTIVE_FISHERY.name} <span data-fishery-count="${ACTIVE_FISHERY.id}">— / 24명</span></button><button class="chat-fold" data-act="chat-fold" data-ref="chatFold" aria-label="채팅 접기" aria-expanded="true">−</button></header>
   <div class="dock-messages" data-ref="chatLog" role="log" aria-live="polite" aria-relevant="additions text"></div>
   <p class="dock-error" data-ref="chatError" role="alert" hidden></p>
-  <div class="dock-compose" data-ref="chatCompose" hidden><input id="chat-input" data-act="chat-draft" maxlength="200" aria-label="채팅 메시지" placeholder="메시지 입력 · Enter 전송 · Esc 닫기" autocomplete="off"><button data-act="online-send" data-ref="chatSend">전송</button></div>
-  <button class="chat-open" data-act="chat-focus" data-ref="chatHint">Enter · 채팅 입력</button>
+  <div class="dock-compose" data-ref="chatCompose" hidden><input id="chat-input" data-act="chat-draft" maxlength="200" aria-label="채팅 메시지" placeholder="메시지 입력" autocomplete="off"><button data-act="online-send" data-ref="chatSend">전송</button></div>
+  <button class="chat-open" data-act="chat-focus" data-ref="chatHint"><span class="key-hint">Enter · </span>채팅 입력</button>
 </section>
 <div class="modal" data-ref="modal"></div>
 <div class="catch" data-ref="catch"></div>`;
@@ -177,16 +178,15 @@ export class Hud {
         this.updateChat(); break;
       case 'online-scope': this.ui.onlineScope = id as 'all' | FisheryId; this.syncOnlineView(); rerender(); break;
       case 'online-species': this.ui.onlineSpecies = id as SpeciesId; this.syncOnlineView(); rerender(); break;
-      case 'map':
-        if (this.started) this.h.menu('platforms');
-        break;
       case 'bait': this.h.rig('bait', id, this.rigTarget()); rerender(); break;
       case 'line': this.h.rig('line', id, this.rigTarget()); rerender(); break;
       case 'rig': this.h.rig(kind, id, this.rigTarget()); rerender(); break;
       case 'rig-target': this.ui.rigTarget = id; rerender(); break;
       case 'rig-step': this.ui.rigStep = id as P.RigStep; rerender(); break;
       case 'buy': this.h.buy(kind as ShopKind, id); rerender(); break;
-      case 'shop-tab': this.ui.shopTab = id as P.ShopTab; rerender(); break;
+      case 'shop-tab': this.ui.shopTab = id as P.ShopTab; this.ui.shopModel = null; this.ui.shopBrand = null; rerender(); break;
+      case 'shop-brand': this.ui.shopBrand = id === 'all' ? null : id; this.ui.shopModel = null; this.el.modal.querySelector('.panel')?.scrollTo?.(0, 0); rerender(); break;
+      case 'shop-model': this.ui.shopModel = id || null; this.el.modal.querySelector('.panel')?.scrollTo?.(0, 0); rerender(); break;
       case 'shop-quality': this.ui.shopQuality = Math.max(0, Math.min(5, Number(id) || 0)); rerender(); break;
       case 'shop-affordable': this.ui.shopAffordable = !this.ui.shopAffordable; rerender(); break;
       case 'shop-goal': this.h.shopGoal(kind as ShopKind, id); rerender(); break;
@@ -195,9 +195,15 @@ export class Hud {
       case 'sell-one': this.h.sellOne(id); rerender(); break;
       case 'release': this.h.release(id); rerender(); break;
       case 'gather': this.h.gather(); rerender(); break;
-      case 'craft': this.h.craft(id); rerender(); break;
+      case 'feed-filter': this.ui.feedFilter = id as P.UiState['feedFilter']; rerender(); break;
+      case 'feed-new': this.ui.feedView = 'mix'; this.ui.feedFilter = 'all'; rerender(); break;
+      case 'feed-view': this.ui.feedView = id as P.UiState['feedView']; rerender(); break;
+      case 'feed-adjust': this.setFeedCount(id, (this.ui.feedDraft.parts.find(p => p.key === id)?.count ?? 0) + Number(kind)); rerender(); break;
+      case 'feed-clear': this.ui.feedDraft.parts = []; rerender(); break;
+      case 'craft':
+        if (this.h.craft(this.ui.feedDraft)) { this.ui.feedDraft.parts = []; this.ui.feedDraft.name = ''; this.ui.feedView = 'list'; }
+        rerender(); break;
       case 'take': this.h.take(Number(id)); break;
-      case 'feed': this.h.feed(); break;
       case 'equip': this.h.equip(kind as 'net' | 'keepnet', id); rerender(); break;
       case 'repair': this.h.repair(id); rerender(); break;
       case 'deploy': this.h.deploy(id); break;
@@ -223,6 +229,19 @@ export class Hud {
 
   private onInput(ev: Event) {
     const t = ev.target as HTMLInputElement;
+    if (t.dataset.act === 'feed-name') this.ui.feedDraft.name = t.value;
+    if (t.dataset.act === 'feed-count') {
+      const count = this.setFeedCount(t.dataset.id!, Number(t.value));
+      if (t.value !== '') t.value = String(count);
+      const row = t.closest('.feed-material');
+      row?.classList.toggle('selected', count > 0);
+      const minus = row?.querySelector<HTMLButtonElement>('[data-kind="-1"]');
+      const plus = row?.querySelector<HTMLButtonElement>('[data-kind="1"]');
+      if (minus) minus.disabled = count === 0;
+      if (plus) plus.disabled = count >= Math.min(this.player.feedMaterialCount(t.dataset.id!), 1000);
+      const summary = this.el.modal.querySelector('[data-feed-summary]');
+      if (summary) summary.innerHTML = P.feedSummary(this.ctx());
+    }
     if (t.dataset.act === 'nickname-draft') this.ui.nicknameDraft = t.value;
     if (t.dataset.act === 'chat-draft') this.ui.chatDraft = t.value;
     const out = t.closest('.field')?.querySelector('output');
@@ -234,6 +253,13 @@ export class Hud {
       this.h.setting(t.dataset.kind as keyof Settings, t.value);
       if (out) out.textContent = t.dataset.kind === 'volume' ? String(Math.round(Number(t.value) * 100)) : Number(t.value).toFixed(1);
     }
+  }
+
+  private setFeedCount(key: string, value: number) {
+    const count = Number.isFinite(value) ? Math.max(0, Math.min(1000, this.player.feedMaterialCount(key), Math.floor(value))) : 0;
+    this.ui.feedDraft.parts = this.ui.feedDraft.parts.filter(p => p.key !== key);
+    if (count) this.ui.feedDraft.parts.push({ key, count });
+    return count;
   }
 
   open(m: Modal) {
@@ -358,10 +384,8 @@ export class Hud {
   }
 
   setPlatforms(platforms: P.PlatformStatus[], current: number | null) {
-    const changed = JSON.stringify(this.platforms) !== JSON.stringify(platforms) || this.currentPlatform !== current;
     this.platforms = platforms;
     this.currentPlatform = current;
-    if (changed && this.modal === 'platforms') this.renderModal();
   }
 
   /** 지금 할 수 있는 동작 한 줄 (없으면 숨긴다) */
@@ -393,16 +417,24 @@ export class Hud {
 
   renderModal() {
     const box = this.el.modal;
+    const craftScroll = this.modal === 'crafting' ? {
+      panel: box.querySelector('.crafting-panel')?.scrollTop ?? 0,
+      materials: box.querySelector('.feed-materials')?.scrollTop ?? 0,
+    } : null;
     box.classList.toggle('on', this.modal !== 'none');
     const c = this.ctx();
     const panels: Record<Exclude<Modal, 'none'>, (c: P.PanelCtx) => string> = {
-      setup: P.setupPanel, keepnet: P.keepnetPanel, market: P.marketPanel, inventory: P.inventoryPanel, shop: P.shopPanel, collection: P.collectionPanel,
-      records: P.recordsPanel, platforms: P.platformsPanel, quests: P.questsPanel, skills: P.skillsPanel, tournament: P.tournamentPanel,
+      setup: P.setupPanel, keepnet: P.keepnetPanel, market: P.marketPanel, inventory: P.inventoryPanel, crafting: P.craftingPanel, shop: P.shopPanel, collection: P.collectionPanel, records: P.recordsPanel, quests: P.questsPanel, skills: P.skillsPanel, tournament: P.tournamentPanel,
       settings: P.settingsPanel, pause: P.pausePanel, account: P.accountPanel, onlineRanking: P.onlineRankingPanel,
     };
     box.innerHTML = this.modal === 'none' ? '' : panels[this.modal](c);
     // 모든 창은 맨 오른쪽 위에 닫기(✕). 스크롤해도 따라 내려온다
     box.querySelector('.panel')?.insertAdjacentHTML('afterbegin', '<div class="panel-x"><button data-act="resume" title="닫기 (Esc)" aria-label="닫기"><i></i><i></i></button></div>');
+    if (craftScroll) {
+      const panel = box.querySelector('.crafting-panel'), materials = box.querySelector('.feed-materials');
+      if (panel) panel.scrollTop = craftScroll.panel;
+      if (materials) materials.scrollTop = craftScroll.materials;
+    }
     this.updateCounts(); this.updateChat();
   }
 
@@ -414,7 +446,7 @@ export class Hud {
     const bounty = p.bounty(c);
     const small = p.tooSmall(c);
     const full = p.keepnet.length >= p.keepnetSpec.capacity;
-    const keepNote = small ? `금지 체장(${SPECIES_RULES[c.species.id].minKeepCm}cm) 미만이라 보관할 수 없어요` : full ? `살림망이 가득 찼어요 (${p.keepnetSpec.capacity}마리). 판매하거나 더 큰 살림망을 쓰세요` : '';
+    const keepNote = small ? `금지 체장(${SPECIES_RULES[c.species.id].minKeepCm}cm) 미만이라 보관할 수 없어요` : full ? `살림망이 가득 찼어요 (${p.keepnetSpec.capacity}마리) · 어시장에서 팔거나 놓아주세요` : '';
     box.innerHTML = `<div class="catch-card">
   <p class="rank">${P.sizeRankBadge(c.species.id, c.cm)}</p>
   <div class="fish-icon">${fishIcon(c.species.look)}</div><h2>${c.species.name}</h2>
@@ -451,9 +483,9 @@ export class Hud {
     return { x: r.left, y: r.top, w: r.width, h: r.height };
   }
 
-  /** 하단: 경험치 줄 · 핫바 (1~3 낚싯대, 4 집어) */
+  /** 하단: 경험치 줄 · 핫바 (1~3 낚싯대) */
   private updateBottom() {
-    const p = this.player, d = p.data;
+    const p = this.player;
     (this.el.xp.firstElementChild as HTMLElement).style.width = `${p.levelProgress * 100}%`;
     this.set('lv', this.el.xp.lastElementChild as HTMLElement, String(p.level));
     const rods = Array.from({ length: MAX_DEPLOYED_RODS }, (_, i) => {
@@ -462,8 +494,7 @@ export class Hud {
       return P.slot(itemIcon('rod', rod?.rodId), '', `data-act="take" data-id="${i + 1}" ${rod || canPrepare ? '' : 'disabled'} title="${rod ? P.esc(`${rod.name} · ${rod.platform}번 좌대 · ${rod.state}`) : `${['왼쪽', '가운데', '오른쪽'][i]} 빈 자리 · 낚싯대 꺼내기`}"`,
         `${rod?.active ? 'on' : ''} ${rod?.biting ? 'biting' : ''} ${rod && !rod.active ? 'parked' : ''} ${rod ? '' : 'ghost'}`);
     });
-    const chum = P.slot(itemIcon('chum'), this.game.chumProduct ? d.baitProducts[this.game.chumProduct.id] ?? 0 : d.baits.chum, `data-act="feed" title="${P.esc(this.game.chumProduct?.name ?? '집어 떡밥')} 뿌리기 (4 / G)"`);
-    this.set('hotbar', this.el.hotbar, [...rods, chum].map((s, i) => `<div class="hot"><kbd>${i + 1}</kbd>${s}</div>`).join(''));
+    this.set('hotbar', this.el.hotbar, rods.map((s, i) => `<div class="hot"><kbd>${i + 1}</kbd>${s}</div>`).join(''));
   }
 
   /** 대회 중일 때만 위쪽에 한 줄. 받을 보상·기술 포인트는 메뉴 버튼 배지로 */
@@ -480,6 +511,12 @@ export class Hud {
   }
 
   update(pipOn: boolean) {
+    // 키보드에서만 입력칸에 키 안내를 붙인다 (터치 조작이 켜지거나 꺼지면 바꾼다)
+    const touch = document.body.classList.contains('touch');
+    if (touch !== this.touchHints) {
+      this.touchHints = touch;
+      (this.el.chatCompose.querySelector('input') as HTMLInputElement).placeholder = touch ? '메시지 입력' : '메시지 입력 · Enter 전송 · Esc 닫기';
+    }
     const g = this.game, env = this.env;
     this.set('place', this.el.place, this.player.saveFailed ? '<span class="save-error">저장 공간 부족 · 이번 진행은 저장되지 않았어요</span>' : '');
     // 살림망 게이지: 마릿수 / 한도, 고리는 찬 만큼

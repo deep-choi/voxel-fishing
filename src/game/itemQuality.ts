@@ -8,17 +8,17 @@ export const QUALITY_LABELS = ['기본', '실용', '고급', '전문', '명품']
 const TIERS: Record<Rarity, number> = { common: 1, uncommon: 2, rare: 3, epic: 4, legendary: 5 };
 const quality = (tier: number, purpose: string): ItemQuality => ({ tier, label: QUALITY_LABELS[tier - 1] ?? QUALITY_LABELS[0], purpose });
 const gearQuality = (gear: GearMeta | undefined, purpose: string) => quality(gear ? TIERS[gear.rarity] : 1, gear?.purpose ?? purpose);
-const BAIT_USE: Record<BaitId | 'chum', string> = {
+const BAIT_USE: Record<BaitId, string> = {
   worm: '생미끼 · 다양한 어종', paste: '곡물 · 붕어·잉어', corn: '큰 미끼 · 잉어',
-  gluten: '섬세한 떡밥 · 붕어', pellet: '어분 · 잉어·향어', shrimp: '생미끼 · 육식어', chum: '주변 집어',
+  gluten: '섬세한 떡밥 · 붕어', pellet: '어분 · 잉어·향어', shrimp: '생미끼 · 육식어',
 };
 const BAIT_TIERS: Record<string, number> = {
   'kw-burger': 2, 'kw-aqua2': 2, 'kw-chum': 2, 'toco-fish': 2, 'toco-vanilla': 3,
   'toco-11': 3, 'mq-wata': 2, 'mq-nozuri': 3, 'mq-imo': 2, 'mq-alpha21': 4, 'mq-ookoi': 3,
 };
 const INGREDIENT_QUALITY: Record<string, ItemQuality> = {
-  bran: quality(1, '곡물 배합 · 집어'), cornmeal: quality(1, '곡물 배합 · 먹이 입자'),
-  attractor: quality(2, '새우 향 · 집어'), fishmeal: quality(2, '어분 배합 · 잉어·향어'),
+  bran: quality(1, '곡물 떡밥 배합'), cornmeal: quality(1, '곡물 배합 · 먹이 입자'),
+  attractor: quality(2, '새우 향 · 떡밥 배합'), fishmeal: quality(2, '어분 배합 · 잉어·향어'),
   glutenpowder: quality(2, '글루텐 배합 · 바늘 잔존'),
 };
 
@@ -54,7 +54,6 @@ export function itemQuality(kind: string, id: string): ItemQuality {
     case 'bait': {
       const product = BAIT_PRODUCTS.find(x => x.id === id);
       if (product) return quality(product.qualityTier ?? BAIT_TIERS[id] ?? 2, product.purpose ?? BAIT_USE[product.baseBait]);
-      if (id === 'chum') return quality(1, BAIT_USE.chum);
       return quality(1, BAITS[id as BaitId] ? BAIT_USE[id as BaitId] : '기본 미끼');
     }
     case 'ing':

@@ -1,8 +1,9 @@
 import type { GearMeta, Rarity, SpeciesId } from './data';
 import { EXPANDED_KEEPNETS, EXPANDED_NETS } from './gearExpansion';
+import { applyFictionalProductName } from './fictionalBrands';
 
 // 낚싯대·채비 밖의 장비: 뜰채, 살림망. 등급 색은 마인크래프트 아이템 이름 색을 따른다.
-// 상품명의 브랜드는 실제 국내 판매 브랜드다. 출시 전 상표 사용 허락을 받거나 가상 이름으로 바꾼다.
+// 게임 화면과 가방에는 fictionalBrands.ts의 가상 제조사 표시명을 사용한다.
 
 export const RARITY: Record<Rarity, { name: string; color: string }> = {
   common: { name: '일반', color: '#e8e8e0' },
@@ -38,6 +39,8 @@ export const KEEPNETS: KeepnetSpec[] = [
 
 NETS.push(...EXPANDED_NETS);
 KEEPNETS.push(...EXPANDED_KEEPNETS);
+for (const net of NETS) applyFictionalProductName('net', net);
+for (const keepnet of KEEPNETS) applyFictionalProductName('keepnet', keepnet);
 
 /** 어종별 시세·규정. 배스·블루길은 생태계교란종이라 방생 대신 수매한다. */
 export const SPECIES_RULES: Record<SpeciesId, { perKg: number; minKeepCm?: number; bounty?: number; active: 'day' | 'night' | 'twilight' | 'any' }> = {

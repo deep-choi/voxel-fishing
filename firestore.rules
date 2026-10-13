@@ -47,13 +47,44 @@ service cloud.firestore {
     match /presence/{map}/slots/{slot} {
       allow get: if signedIn() && validMap(map) && validSlot(slot);
       allow list: if signedIn() && validMap(map) && request.query.limit != null && request.query.limit <= 24;
+      function validRemoteRod(rod) {
+        return rod is map && rod.keys().hasAll(['slotId','rodId']) && rod.keys().hasOnly(['slotId','rodId'])
+          && rod.slotId is string && rod.slotId.matches('^[1-8]-[1-3]-[1-3]$')
+          && rod.rodId in ['starter','long','power','light','carbon','legend','memphis','grand','gold','mugung','willow-soft','willow-finesse','willow-guard','willow-master'];
+      }
+      function validRemoteRodSlots(rodSlots) {
+        return rodSlots is list && rodSlots.size() <= 3
+          && (rodSlots.size() < 1 || validRemoteRod(rodSlots[0]))
+          && (rodSlots.size() < 2 || validRemoteRod(rodSlots[1]))
+          && (rodSlots.size() < 3 || validRemoteRod(rodSlots[2]));
+      }
+      function validHeldRod(held) {
+        return held == null || (held is map
+          && held.keys().hasAll(['rodId','buttX','buttY','buttZ','dirX','dirY','dirZ'])
+          && held.keys().hasOnly(['rodId','buttX','buttY','buttZ','dirX','dirY','dirZ'])
+          && held.rodId in ['starter','long','power','light','carbon','legend','memphis','grand','gold','mugung','willow-soft','willow-finesse','willow-guard','willow-master']
+          && held.buttX is number && held.buttX >= -2000 && held.buttX <= 2000
+          && held.buttY is number && held.buttY >= -50 && held.buttY <= 100
+          && held.buttZ is number && held.buttZ >= -2000 && held.buttZ <= 2000
+          && held.dirX is number && held.dirX >= -1 && held.dirX <= 1
+          && held.dirY is number && held.dirY >= -1 && held.dirY <= 1
+          && held.dirZ is number && held.dirZ >= -1 && held.dirZ <= 1);
+      }
+      function validRemotePose(d) {
+        return !d.keys().hasAny(['x','z','yaw','rodSlots','heldRod']) || (d.keys().hasAll(['x','z','yaw','rodSlots','heldRod'])
+          && d.x is number && d.x >= -2000 && d.x <= 2000
+          && d.z is number && d.z >= -2000 && d.z <= 2000
+          && d.yaw is number && d.yaw >= -7 && d.yaw <= 7
+          && validRemoteRodSlots(d.rodSlots) && validHeldRod(d.heldRod));
+      }
       function validSeat() {
         let d = request.resource.data;
         return signedIn() && openMap(map) && validSlot(slot)
           && d.keys().hasAll(['uid','nickname','sessionId','updatedAt'])
-          && d.keys().hasOnly(['uid','nickname','sessionId','updatedAt'])
+          && d.keys().hasOnly(['uid','nickname','sessionId','updatedAt','x','z','yaw','rodSlots','heldRod'])
           && d.uid == request.auth.uid && d.nickname == profile(request.auth.uid).nickname
-          && d.sessionId is string && d.sessionId.size() == 36 && d.updatedAt == request.time;
+          && d.sessionId is string && d.sessionId.size() == 36 && d.updatedAt == request.time
+          && validRemotePose(d);
       }
       allow create: if validSeat();
       allow update: if validSeat() && (owner(resource.data.uid) || resource.data.updatedAt <= request.time - duration.value(150, 's'));
@@ -62,15 +93,32 @@ service cloud.firestore {
     match /rooms/{map}/messages/{id} {
       allow get: if signedIn() && validMap(map);
       allow list: if signedIn() && validMap(map) && request.query.limit != null && request.query.limit <= 50;
-      allow create: if signedIn() && validMap(map)
-        && request.resource.data.keys().hasOnly(['uid','nickname','text','createdAt','slotId','sessionId'])
-        && membership(map, request.resource.data.slotId, request.resource.data.sessionId)
-        && request.resource.data.uid == request.auth.uid && request.resource.data.nickname == profile(request.auth.uid).nickname
-        && request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 200
-        && request.resource.data.createdAt == request.time
+      function validMessageBase() {
+        let d = request.resource.data;
+        return signedIn() && validMap(map)
+          && membership(map, d.slotId, d.sessionId)
+          && d.uid == request.auth.uid && d.nickname == profile(request.auth.uid).nickname
+          && d.createdAt == request.time;
+      }
+      function validChatMessage() {
+        let d = request.resource.data;
+        return d.keys().hasOnly(['uid','nickname','text','createdAt','slotId','sessionId'])
+          && d.text is string && d.text.size() > 0 && d.text.size() <= 200
         && (!('lastChatAt' in profile(request.auth.uid)) || profile(request.auth.uid).lastChatAt <= request.time - duration.value(3, 's'))
         && getAfter(/databases/$(database)/documents/players/$(request.auth.uid)).data.lastChatAt == request.time
         && getAfter(/databases/$(database)/documents/players/$(request.auth.uid)).data.lastMessageId == id;
+      }
+      function validCatchMessage() {
+        let d = request.resource.data;
+        return d.keys().hasAll(['kind','catchId','uid','nickname','speciesId','cm','kg','createdAt','slotId','sessionId'])
+          && d.keys().hasOnly(['kind','catchId','uid','nickname','speciesId','cm','kg','createdAt','slotId','sessionId'])
+          && d.kind == 'catch' && d.catchId is string
+          && d.catchId.matches('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
+          && id == 'catch_' + request.auth.uid + '_' + d.catchId
+          && validSpecies(d.speciesId) && d.cm is number && d.cm >= 6 && d.cm <= maxLength(d.speciesId)
+          && d.kg is number && d.kg > 0 && d.kg <= 100;
+      }
+      allow create: if validMessageBase() && (validCatchMessage() || validChatMessage());
       allow update, delete: if false;
     }
     match /leaderboards/{scope}/species/{species}/entries/{uid} {

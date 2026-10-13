@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { heightAt, PLAYER, spotQuality, waterDepth, WATER_Y } from '../world/lake';
 import { smoothstep } from '../world/noise';
 import { BAITS, FLOATS, HOOKS, LINES, RODS, SPECIES_LIST, rankOf, weightKg, type BaitId, type Species } from './data';
-import { baitProduct } from './realCatalog';
+import { baitProduct, type BaitProduct } from './realCatalog';
 import { encounterRates, biteProbability, pickEncounter, pickEncounterLength, type EncounterRate } from './ecology';
 import { ACTIVE_FISHERY } from './fisheries';
 import { FishingGrounds } from './grounds';
@@ -91,6 +91,8 @@ interface Fish {
   maxPull: number;
   /** 원줄에 실리는 실제 당김 (kgf). 장력 게이지·줄 터짐·대 부러짐은 이 값으로 */
   pullKg: number;
+  /** 지금 내고 있는 당김 (kgf). 행동이 바뀌어도 한순간에 최대 힘이 실리지 않고 서서히 붙는다 */
+  thrust: number;
   behavior: Behavior;
   bTime: number;
   dir: THREE.Vector3;
@@ -122,7 +124,6 @@ export class Fishing {
   // 채비 설정
   bait: BaitId = 'worm';
   baitProductId?: string;
-  chumProductId?: string;
   depthSet = 1.8;
   lineIdx = 1;
   rodId = 'starter';
@@ -185,7 +186,7 @@ export class Fishing {
   private readonly lastTip = new THREE.Vector3();
   private prevPrimary = false;
 
-  constructor(readonly origin = PLAYER, private readonly progress?: { keepnet: Catch[]; best: Record<string, number>; ownerId?: string; consumeBait?: (id: BaitId | 'chum', productId?: string) => boolean }, readonly grounds = new FishingGrounds()) {
+  constructor(readonly origin = PLAYER, private readonly progress?: { keepnet: Catch[]; best: Record<string, number>; ownerId?: string; consumeBait?: (id: BaitId, productId?: string) => boolean; baitProduct?: (id?: string) => BaitProduct | undefined }, readonly grounds = new FishingGrounds()) {
     this.ownerId = progress?.ownerId ?? 'local-player';
     this.keepnet = progress?.keepnet ?? [];
     this.best = progress?.best ?? {};
@@ -215,20 +216,10 @@ export class Fishing {
   get floatSpec() { return FLOATS.find(f => f.id === this.floatId) ?? FLOATS[0]; }
   get hook() { return HOOKS.find(h => h.id === this.hookId) ?? HOOKS[0]; }
   get rigSensitivity() { return rigSensitivity(this.line, this.hook, this.floatSpec); }
-  get baitProduct() { const p = baitProduct(this.baitProductId); return p && p.baseBait === this.bait ? p : undefined; }
+  get baitProduct() { const p = this.progress?.baitProduct?.(this.baitProductId) ?? baitProduct(this.baitProductId); return p && p.baseBait === this.bait ? p : undefined; }
   get baitName() { return this.baitProduct?.name ?? BAITS[this.bait].name; }
-  get chumProduct() { const p = baitProduct(this.chumProductId); return p?.baseBait === 'chum' ? p : undefined; }
-  get rig(): Rig { return { rodId: this.rodId, floatId: this.floatId, hookId: this.hookId, bait: this.bait, baitProductId: this.baitProductId, chumProductId: this.chumProductId, lineIdx: this.lineIdx, depthSet: this.depthSet }; }
-  setRig(rig: Rig) { if (this.canRig) { Object.assign(this, rig); this.baitProductId = rig.baitProductId; this.chumProductId = rig.chumProductId; } }
-  feed() {
-    if (!this.floatInWater || this.floatOnLand || this.phase === 'fighting') return false;
-    if (this.progress?.consumeBait && !this.progress.consumeBait('chum', this.chumProduct?.id)) return false;
-    const flavor = this.chumProduct?.chumFlavor ?? (this.chumProduct?.id === 'toco-11' ? 'pellet' : this.chumProduct?.id === 'kw-chum' ? 'paste' : undefined);
-    this.grounds.addFeed(this.float.x, this.float.z, 4 * mods.chum * (this.chumProduct?.chumScale ?? 1), flavor, this.chumProduct?.speciesAffinity);
-    this.emit({ type: 'splash', x: this.float.x, z: this.float.z, size: 0.35 });
-    this.emit({ type: 'toast', text: '찌 주변에 집어 떡밥을 뿌렸어요', tone: 'good' });
-    return true;
-  }
+  get rig(): Rig { return { rodId: this.rodId, floatId: this.floatId, hookId: this.hookId, bait: this.bait, baitProductId: this.baitProductId, lineIdx: this.lineIdx, depthSet: this.depthSet }; }
+  setRig(rig: Rig) { if (this.canRig) { Object.assign(this, rig); this.baitProductId = rig.baitProductId; } }
   get floatInWater() {
     return this.phase === 'settling' || this.phase === 'waiting' || this.phase === 'fighting' || this.phase === 'flying';
   }
@@ -294,7 +285,7 @@ export class Fishing {
     }
     if (this.progress?.consumeBait && !this.progress.consumeBait(this.bait, this.baitProduct?.id)) {
       this.phase = 'ready';
-      this.emit({ type: 'toast', text: '미끼가 없어요. B키로 상점에서 보충하세요', tone: 'bad' });
+      this.emit({ type: 'toast', text: '미끼가 없어요 · 낚시점에서 살 수 있어요', tone: 'bad' });
       return;
     }
     this.phase = 'casting';
@@ -345,7 +336,7 @@ export class Fishing {
       this.float.y = heightAt(x, z) + 0.02;
       this.phase = 'waiting';
       this.floatTilt = 1;
-      this.emit({ type: 'toast', text: '물 밖에 떨어졌어요. 좌클릭으로 감아 들이세요.', tone: 'bad' });
+      this.emit({ type: 'toast', text: '찌가 물 밖에 떨어졌어요', tone: 'bad' });
       return;
     }
     this.float.y = WATER_Y;
@@ -364,7 +355,7 @@ export class Fishing {
     this.spotDepth = d;
     this.measuredDepth = d;
     // 집어: 떡밥을 같은 자리에 던질수록 고기가 모인다
-    const chum = BAITS[this.bait].chum * (this.baitProduct?.chumScale ?? 1);
+    const chum = BAITS[this.bait].chum * (this.baitProduct?.chumScale ?? 1) * mods.chum;
     if (chum > 0) this.grounds.addFeed(x, z, chum, this.bait, this.baitProduct?.speciesAffinity);
     this.biteCooldown = this.fastTest ? 0.6 : rand(3, 8);
   }
@@ -531,11 +522,14 @@ export class Fishing {
     const b = this.phase === 'waiting' && !this.floatOnLand ? this.bite : null;
     let failedPenetration = false;
     if (b) {
-      const pad = Math.max(-0.22, mods.hookWindow + (this.rigSensitivity - 1) * 0.18);
+      // 둔한 채비(굵은 줄·큰 바늘)는 구간이 조금 좁아지고, 예민한 채비는 넓어진다
+      const sens = this.rigSensitivity;
+      const pad = Math.max(-0.22, mods.hookWindow + (sens - 1) * (sens < 1 ? 0.08 : 0.18));
       const w = this.fastTest ? b.windows[0] : b.windows.find((w) => b.t >= w.t0 - pad && b.t <= w.t1 + pad);
       if (w) {
         const perfect = b.t >= w.p0 && b.t <= w.p1;
-        if (Math.random() < hookSetChance(b.sp, b.cm, this.hook, this.bait, perfect)) {
+        // 정확한 순간이면 반드시 걸리고, 그냥 구간 안이면 바늘·미끼·날카로움에 따른 확률
+        if (perfect || Math.random() < hookSetChance(b.sp, b.cm, this.hook, this.bait, perfect)) {
           this.bite = null;
           this.emit({ type: 'hookset', hit: true });
           this.startFight(b, perfect ? 'perfect' : 'good');
@@ -549,7 +543,7 @@ export class Fishing {
       this.biteCooldown = rand(8, 18);
     }
     this.emit({ type: 'hookset', hit: false });
-    this.emit({ type: 'toast', text: failedPenetration ? '바늘이 제대로 박히지 않았어요 · 바늘 크기와 미끼를 확인하세요' : b ? '헛챔질 — 채비가 물 밖으로 나왔어요' : '대를 들어 채비를 걷었어요', tone: b ? 'bad' : 'info' });
+    this.emit({ type: 'toast', text: failedPenetration ? '바늘이 박히지 않았어요' : b ? '헛챔질 — 채비가 물 밖으로 나왔어요' : '대를 들어 채비를 걷었어요', tone: b ? 'bad' : 'info' });
     if (!this.floatOnLand) this.emit({ type: 'ripple', x: this.float.x, z: this.float.z, size: 0.6 });
     this.retrieve();
   }
@@ -559,7 +553,12 @@ export class Fishing {
   private startFight(b: Bite, quality: HooksetQuality) {
     this.fightTime = 0;
     const kg = weightKg(b.sp, b.cm);
-    const hold = hookHoldingPower(b.sp, b.cm, this.hook, this.bait, quality) * rand(0.94, 1.06);
+    // 돌진 최대 당김 = 몸무게의 0.7~0.85배 (힘센 어종일수록 0.85배 쪽).
+    // 대가 휘며 충격을 받아 주므로, 버티기만 하면 몸무게만큼의 하중을 견디는 채비로 그 무게의 고기를 걸어 낼 수 있다.
+    // 그 이상은 대를 세워 계속 당길 때 낚시꾼이 더하는 힘이다
+    const pullKg = kg * (0.7 + 0.15 * THREE.MathUtils.clamp((b.sp.power - 1.4) / 1, 0, 1)) + 0.02;
+    // 하중은 장비·입 크기·챔질로 결정한다. 큰 고기가 물었다고 약한 바늘을 자동 강화하지 않는다.
+    const hold = hookHoldingPower(b.sp, b.cm, this.hook, this.bait, quality) * (this.baitProduct?.holdingScale ?? 1) * rand(0.94, 1.06);
     this.fish = {
       sp: b.sp,
       cm: b.cm,
@@ -568,8 +567,8 @@ export class Fishing {
       vel: new THREE.Vector3(),
       stamina: 1,
       maxPull: FISH_POWER * b.sp.power * Math.pow(kg, 0.85) + 0.35,
-      // 돌진 순간 최대 당김 = 몸무게의 1.1~1.4배 (힘센 어종일수록 1.4배 쪽). 220g 붕어 ≈ 0.27kgf, 3kg 잉어 ≈ 4kgf
-      pullKg: kg * (1.1 + 0.3 * THREE.MathUtils.clamp((b.sp.power - 1.4) / 1, 0, 1)) + 0.02,
+      pullKg,
+      thrust: pullKg * 0.3,
       behavior: 'run',
       bTime: rand(1.5, 3),
       dir: this.awayDir(rand(-1, 1)),
@@ -655,12 +654,22 @@ export class Fishing {
     // 대를 세워 고기를 띄워 발 앞까지 끌어오면 뜰채로
     const dPlayer = Math.hypot(f.pos.x - this.origin.x, f.pos.z - this.origin.z);
     // 무거운 고기는 더 지쳐야 뜨고, 대를 세운 채 한동안 버텨야 들린다 (붕어 0.3kg ≈ 0.5초, 잉어 3kg ≈ 3초)
-    const tired = f.kg < 0.3 ? 1 : 0.42 / (1 + f.kg * 0.35);
-    if (dPlayer < 3.6 && f.pos.y > -0.6 && inp.primary && f.stamina < tired) {
+    // 대가 압도하는 가벼운 고기는 조금만 지쳐도 뜬다
+    const tired = Math.min(1, (f.kg < 0.3 ? 1 : 0.42 / (1 + f.kg * 0.35)) * this.dominance(f));
+    // 원줄이 수면에 닿는 데까지 대를 세웠을 때 원줄 끝의 고기가 오는 곳까지가 뜰채 거리.
+    // (원줄보다 대 끝이 높아지는 각도까지 세워야만 닿던 거리라, 줄을 억지로 늘려야 끌어낼 수 있었다)
+    const L = this.rod.length;
+    const buttX = inp.tip.x - inp.rodDir.x * L, buttY = inp.tip.y - inp.rodDir.y * L, buttZ = inp.tip.z - inp.rodDir.z * L;
+    const lead = Math.min(1.4, this.leadElevation(buttY));
+    const leadTipY = buttY + L * Math.sin(lead) - WATER_Y;
+    const lineReach = Math.sqrt(Math.max(0, this.lineOut ** 2 - (leadTipY + 0.1) ** 2));
+    const netReach = Math.max(3.6, Math.hypot(buttX - this.origin.x, buttZ - this.origin.z) + L * Math.cos(lead) + lineReach + 0.4);
+    const near = dPlayer < netReach && f.pos.y > -0.6 && inp.primary;
+    if (near && f.stamina < tired) {
       this.liftT += dt;
       if (this.liftT >= this.liftNeed) this.landFish(f);
     } else this.liftT = Math.max(0, this.liftT - dt * 1.5);
-    if (dPlayer < 3.6 && f.pos.y > -0.6 && inp.primary && f.stamina >= tired) {
+    if (near && f.stamina >= tired) {
       if (f.behavior !== 'run') {
         f.behavior = 'run';
         f.bTime = rand(1.5, 3);
@@ -721,6 +730,8 @@ export class Fishing {
     const kRod = this.rod.power / (this.rod.flex * (0.12 + 0.88 * sinA));
     const k = 1 / (1 / kLine + 1 / kRod);
     const d = tmp.subVectors(tip, f.pos).length();
+    // 걸린 첫 순간: 줄은 초릿대에서 고기까지 막 팽팽해진 길이에서 시작한다.
+    // (대 끝 → 찌 → 수심만큼 내려간 바늘이 원줄 길이보다 멀면, 처음부터 늘어난 줄로 계산돼 바로 터지던 문제)
     if (Number.isNaN(this.prevStretch)) this.lineOut = Math.max(this.lineOut, d - 0.02);
     const stretch = d - this.lineOut;
     if (Number.isNaN(this.prevStretch)) this.prevStretch = stretch;
@@ -738,7 +749,9 @@ export class Fishing {
     f.bTime -= h;
     if (f.bTime <= 0) this.pickBehavior(f);
     const factor = { run: 1, shake: 0.55, dive: 0.8, rest: 0.12 }[f.behavior];
-    let pull = f.pullKg * (0.22 + 0.78 * f.stamina) * factor;
+    // 고기도 순간에 최대 힘을 내지 못한다: 돌진은 0.4초에 걸쳐 힘이 붙는다
+    f.thrust += (f.pullKg * (0.22 + 0.78 * f.stamina) * factor - f.thrust) * (1 - Math.exp(-h / 0.4));
+    let pull = f.thrust;
     if (f.behavior === 'shake') pull *= 1 + 0.7 * Math.sin(this.t * 32);
     const wd = waterDepth(f.pos.x, f.pos.z);
     const wantY = f.behavior === 'dive' ? -wd + 0.2 : f.stamina < 0.3 ? -0.1 : -Math.min(wd * 0.6, 1.5);
@@ -751,6 +764,9 @@ export class Fishing {
     const cd = (f.pullKg * G) / (f.sp.speed * f.sp.speed);
     const sp = f.vel.length();
     force.addScaledVector(f.vel, -cd * sp - 0.6);
+    // 대가 휘며 돌진 충격을 받아 준다: 대 끝에서 멀어지는 속도만 늦추고 옆으로 달리는 건 막지 않는다
+    const away = -f.vel.dot(toTip);
+    if (away > 0) force.addScaledVector(toTip, 0.25 * f.pullKg * G * away);
     const m = f.kg * 1.4 + 0.05;
     f.vel.addScaledVector(force, h / m);
     const prevX = f.pos.x;
@@ -770,26 +786,37 @@ export class Fishing {
     if (f.pos.y >= -0.04) f.vel.y = Math.min(f.vel.y, 0);
 
     // 힘쓸수록, 줄이 팽팽할수록 지친다
-    const effort = (factor * 0.6 + 0.25) * (0.5 + 0.9 * Math.min(1.5, T / f.pullKg)) * (this.liftHeld ? 1.25 : 1);
+    const effort = (factor * 0.6 + 0.25) * (0.5 + 0.9 * Math.min(1.5, T / f.pullKg)) * (this.liftHeld ? 1.25 : 1) * this.dominance(f);
     const stamSec = f.sp.stamina[0] + f.sp.stamina[1] * f.kg;
     f.stamina = THREE.MathUtils.clamp(f.stamina - (h * effort) / stamSec + (f.behavior === 'rest' ? h * 0.006 : 0), 0, 1);
   }
 
-  private hookComesLoose(dt: number, fish: Fish, slackMeters: number) {
-    // 짧은 장력 피크는 버틴다. 지속 과부하는 누적되며 힘을 풀면 회복한다.
-    // 유지력의 1.5배는 약 1초, 2배는 약 0.5초가 지속되면 빠진다.
-    const overload = this.tension / Math.max(0.05, fish.hookHold) - 1;
-    this.hookOverloadT = overload > 0
-      ? this.hookOverloadT + dt * THREE.MathUtils.clamp(overload * 2, 0.2, 4)
-      : Math.max(0, this.hookOverloadT - dt * 2);
-    if (this.hookOverloadT >= 1) return true;
+  /** 대가 고기를 얼마나 압도하는지 (1~6): 대의 힘에 비해 고기 당김이 작을수록 크다.
+   *  게이지에는 거의 안 잡히는 가벼운 고기는 그만큼 빨리 지치고 빨리 끌려 나온다 */
+  private dominance(f: Fish) {
+    return THREE.MathUtils.clamp(this.rod.power / (f.pullKg * 3), 1, 6);
+  }
 
-    // 미세한 처짐은 무시하고, 줄이 35cm 이상 느슨한 상태가 이어질 때만 판정한다.
-    this.slackT = slackMeters > 0.35 ? this.slackT + dt : 0;
-    if (this.slackT <= 3.5) return false;
-    const shake = fish.behavior === 'shake' ? 1.6 : 1;
+  /** 원줄이 수면에 닿는 한도에서 대를 세울 수 있는 각 (rad). 더 세우면 고기를 물 밖으로 들어야 해서 줄만 늘어난다 */
+  leadElevation(buttY: number) {
+    return Math.asin(THREE.MathUtils.clamp((WATER_Y + this.lineOut - 0.25 - buttY) / this.rod.length, -1, 1));
+  }
+
+  private hookComesLoose(dt: number, fish: Fish, slackMeters: number) {
+    // 박힌 바늘은 평소 당김과 순간 피크를 버틴다. 심한 과부하가 오래 이어져야 빠진다.
+    // 유지력의 2배는 16초, 2.75배 이상도 최소 4초 동안 지속되어야 이탈한다.
+    const overload = this.tension / Math.max(0.05, fish.hookHold) - 1.75;
+    this.hookOverloadT = overload > 0
+      ? this.hookOverloadT + dt * Math.min(overload, 1)
+      : Math.max(0, this.hookOverloadT - dt * 2);
+    if (this.hookOverloadT >= 4) return true;
+
+    // 잠깐 숙이거나 고기가 쉬는 동안에는 빠지지 않는다.
+    // 80cm 넘게 8초 이상 느슨해진 채 힘이 남은 고기가 바늘털이할 때만 드물게 빠진다.
+    this.slackT = slackMeters > 0.8 ? this.slackT + dt : 0;
+    if (this.slackT <= 8 || fish.behavior !== 'shake' || fish.stamina <= 0.25) return false;
     const risk = THREE.MathUtils.clamp(fish.slackRisk, 0.25, 2.2);
-    const rate = 0.025 * shake * risk;
+    const rate = 0.0005 * risk;
     return Math.random() < 1 - Math.exp(-rate * dt);
   }
 
@@ -817,7 +844,7 @@ export class Fishing {
   private landFish(f: Fish) {
     // 뜰채보다 무거우면 떠내다 놓칠 수 있다
     if (f.kg > mods.netMaxKg && Math.random() < 0.7) {
-      this.emit({ type: 'toast', text: `뜰채가 작아요! ${f.kg.toFixed(1)}kg 고기를 떠내지 못했어요 — 더 큰 뜰채가 필요해요`, tone: 'bad' });
+      this.emit({ type: 'toast', text: `뜰채가 작아 ${f.kg.toFixed(1)}kg 고기를 떠내지 못했어요`, tone: 'bad' });
       this.lose('unhook', true);
       return;
     }
@@ -827,7 +854,7 @@ export class Fishing {
     this.phase = 'landed';
     const rank = rankOf(f.sp, f.cm);
     const best = f.cm > (this.best[f.sp.id] ?? 0);
-    this.lastCatch = { species: f.sp, cm: f.cm, kg: f.kg, rank, best, at: Date.now() };
+    this.lastCatch = { id: crypto.randomUUID(), species: f.sp, cm: f.cm, kg: f.kg, rank, best, at: Date.now() };
     this.emit({ type: 'landed' });
   }
 
@@ -909,7 +936,7 @@ function makeBite(sp: Species, cm = rollLength(sp)): Bite {
       // 내림 본신: 찌가 쭈욱 빨려 들어간다
       const s0 = t + rand(0.2, 0.5);
       keys.push([t, 0, 0], [s0, -0.03, 0], [s0 + rand(0.8, 1.2), -0.36, rand(-0.06, 0.06)]);
-      windows.push({ t0: s0, t1: s0 + 1.5, p0: s0 + 0.25, p1: s0 + 1.1 });
+      windows.push({ t0: s0 - 0.1, t1: s0 + 1.8, p0: s0 + 0.2, p1: s0 + 1.3 });
       t = s0 + 1.5;
       keys.push([t + 0.5, 0, 0]);
       t += 0.6;
@@ -919,7 +946,8 @@ function makeBite(sp: Species, cm = rollLength(sp)): Bite {
       const riseDur = rand(1.4, 2.6);
       const hold = rand(0.6, 1.4);
       keys.push([t, 0, 0], [t + riseDur, riseH, 0], [t + riseDur + hold, riseH, 0]);
-      windows.push({ t0: t + riseDur * 0.4, t1: t + riseDur + hold + 0.35, p0: t + riseDur * 0.75, p1: t + riseDur + hold + 0.1 });
+      // 챔질 구간: 올라오는 중반부터 멈춘 뒤 0.6초까지. 정확: 거의 다 올라온 때부터 멈춘 뒤 0.25초까지
+      windows.push({ t0: t + riseDur * 0.25, t1: t + riseDur + hold + 0.6, p0: t + riseDur * 0.6, p1: t + riseDur + hold + 0.25 });
       t += riseDur + hold;
       // 대물은 끝까지 올려 찌를 눕히기도 한다
       if (big > 0.5 && Math.random() < 0.4) keys.push([t + 0.5, riseH + 0.08, 0]);
@@ -934,7 +962,7 @@ function makeBite(sp: Species, cm = rollLength(sp)): Bite {
     keys.push([t, 0, 0], [t + 0.6, -0.04, side * 0.5]);
     const s0 = t + 0.6;
     keys.push([s0 + 1, -0.42, side * 1.5]);
-    windows.push({ t0: s0 - 0.2, t1: s0 + 1.4, p0: s0 + 0.12, p1: s0 + 0.85 });
+    windows.push({ t0: s0 - 0.2, t1: s0 + 1.7, p0: s0 + 0.1, p1: s0 + 1.1 });
     t = s0 + 1.4;
     keys.push([t + 0.6, 0, 0]);
     t += 0.7;
@@ -949,7 +977,7 @@ function makeBite(sp: Species, cm = rollLength(sp)): Bite {
     // 쏘가리·배스: 짧게 건드린 뒤 빠르게 가져간다.
     const side = Math.random() < 0.5 ? -0.2 : 0.2;
     keys.push([t, 0, 0], [t + 0.2, -0.04, side * 0.2], [t + 0.4, -0.26, side], [t + 1, -0.36, side * 1.5], [t + 1.5, 0, 0]);
-    windows.push({ t0: t + 0.2, t1: t + 1.2, p0: t + 0.4, p1: t + 0.9 }); t += 1.6;
+    windows.push({ t0: t + 0.2, t1: t + 1.4, p0: t + 0.35, p1: t + 1.05 }); t += 1.6;
   } else {
     // 블루길: 정신없이 깔짝깔짝, 가끔 쏙 잠긴다
     const n = Math.floor(rand(5, 12));

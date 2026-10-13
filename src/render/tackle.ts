@@ -2,16 +2,40 @@ import * as THREE from 'three';
 import { FLOATS, ROD, type FloatShape, type FloatSpec } from '../game/data';
 import { WATER_Y } from '../world/lake';
 
-// 낚싯대(휘어짐), 스피닝 릴, 한국식 민물 찌, 낚싯줄, 물보라.
+// 낚싯대(민장대, 휘어짐), 바늘, 한국식 민물 찌, 낚싯줄, 물보라.
 
-const SEGS = 28;
-const RADIAL = 8;
-const GRIP = 0.4;
+const RADIAL = 10;
+/** 대 단면 고리 수: 대가 바뀌어도 개수는 그대로, 자리만 다시 잡는다 */
+const RINGS = 160;
+/** 손잡이(천 감기) 끝 (m) */
+const GRIP = 0.38;
+/** 대 재질 묶음: 옻칠 몸통 / 금속 장식 / 천·실 감기 */
+const LACQ = 0;
+const METAL = 1;
+const CLOTH = 2;
+
+/** 대 색 조합: 칠 · 장식 금속 · 손잡이 · 상표 띠 */
+const ROD_LOOKS: [string, string, string, string][] = [
+  ['#1e3b2b', '#c9a24a', '#2b2520', '#0e1310'], // 짙은 녹색 + 금장
+  ['#4a1421', '#d2b264', '#1f1b19', '#140d0e'], // 와인
+  ['#18273f', '#c6ccd3', '#23211f', '#0b0f19'], // 남색 + 은장
+  ['#161616', '#c9a24a', '#3b2a1c', '#5a1a12'], // 흑칠
+  ['#55391f', '#d8b66c', '#1d1a17', '#24170c'], // 갈색 대나무톤
+  ['#173c3a', '#b9c0c7', '#272220', '#0c1514'], // 청록 + 은장
+];
+
+/** 대 단면 하나: 길이 비율 · 반지름 · 색 · 재질 · 끝마개처럼 축 방향을 보는 면인지 */
+interface Knot { s: number; r: number; c: [number, number, number]; mat: number; axial: boolean }
 
 const v1 = new THREE.Vector3();
 const v2 = new THREE.Vector3();
-const v3 = new THREE.Vector3();
+const w1 = new THREE.Vector3();
+const w2 = new THREE.Vector3();
+const w3 = new THREE.Vector3();
+const w4 = new THREE.Vector3();
+const w5 = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
+const FWD = new THREE.Vector3(0, 0, 1);
 
 export interface RodPose {
   butt: THREE.Vector3;
@@ -27,11 +51,36 @@ export class Hook {
   readonly group = new THREE.Group();
   private readonly direction = new THREE.Vector3();
   constructor() {
-    const geo = new THREE.BoxGeometry(1, 1, 1);
-    const mat = new THREE.MeshStandardMaterial({ color: '#cbd3d0', metalness: 0.55, roughness: 0.45 });
-    for (const [x, y, w, h] of [[0.011, 0.025, 0.004, 0.05], [0.004, 0.001, 0.018, 0.004], [-0.004, 0.007, 0.004, 0.016], [0, 0.013, 0.01, 0.004]]) {
-      const m = new THREE.Mesh(geo, mat); m.position.set(x, y, 0); m.scale.set(w, h, 0.004); this.group.add(m);
-    }
+    // 붕어바늘: 귀(고리) → 곧은 축 → 굽은 허리 → 미늘 달린 바늘 끝. 원점 = 고기 입, +y = 목줄 쪽
+    const mat = new THREE.MeshStandardMaterial({ color: '#cfd6d8', metalness: 0.9, roughness: 0.28 });
+    const add = (geo: THREE.BufferGeometry, x: number, y: number, rz = 0, m: THREE.Material = mat) => {
+      const mesh = new THREE.Mesh(geo, m);
+      mesh.position.set(x, y, 0);
+      mesh.rotation.z = rz;
+      this.group.add(mesh);
+      return mesh;
+    };
+    const R = 0.0016;
+    const curve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(0.011, 0.049, 0),
+      new THREE.Vector3(0.011, 0.03, 0),
+      new THREE.Vector3(0.0108, 0.012, 0),
+      new THREE.Vector3(0.0085, 0.003, 0),
+      new THREE.Vector3(0.003, -0.0005, 0),
+      new THREE.Vector3(-0.0025, 0.0015, 0),
+      new THREE.Vector3(-0.005, 0.008, 0),
+      new THREE.Vector3(-0.0052, 0.016, 0),
+    ]);
+    add(new THREE.TubeGeometry(curve, 28, R, 6, false), 0, 0);
+    // 귀: 목줄을 묶는 작은 고리
+    add(new THREE.TorusGeometry(0.0026, 0.0008, 6, 14), 0.011, 0.0515);
+    // 바늘 끝: 살짝 안쪽(축 쪽)으로 숙인 뾰족한 끝
+    add(new THREE.ConeGeometry(R, 0.008, 6), -0.0047, 0.02, -0.12);
+    // 미늘: 바늘 끝 안쪽에서 뒤(아래)로 젖혀진 가시
+    add(new THREE.ConeGeometry(0.001, 0.005, 5), -0.0022, 0.0168, -2.675);
+    // 귀 아래 목줄 매듭 감기
+    add(new THREE.CylinderGeometry(0.0023, 0.0023, 0.006, 8), 0.011, 0.044, 0,
+      new THREE.MeshStandardMaterial({ color: '#e6e3d6', roughness: 0.6 }));
     this.group.visible = false;
   }
   place(mouth: THREE.Vector3, tip: THREE.Vector3, eye: THREE.Vector3) {
@@ -49,10 +98,20 @@ export class RodHands {
     const geo = new THREE.BoxGeometry(1, 1, 1);
     const skin = new THREE.MeshLambertMaterial({ color: '#d8ae87' });
     const sleeve = new THREE.MeshLambertMaterial({ color: '#456c5d' });
+    const cuffMat = new THREE.MeshLambertMaterial({ color: '#36574a' });
     for (const [x, z] of [[0.055, 0.02], [-0.055, -0.25]]) {
       const hand = new THREE.Mesh(geo, skin); hand.scale.set(0.1, 0.085, 0.13); hand.position.set(x, -0.025, z);
       const arm = new THREE.Mesh(geo, sleeve); arm.scale.set(0.115, 0.12, 0.3); arm.position.set(x * 2, -0.09, z + 0.2);
-      this.group.add(hand, arm);
+      // 소매 끝단
+      const cuff = new THREE.Mesh(geo, cuffMat); cuff.scale.set(0.125, 0.13, 0.03); cuff.position.set(x * 2, -0.09, z + 0.065);
+      this.group.add(hand, arm, cuff);
+      // 대를 감싸 쥔 손가락 네 마디
+      for (let f = 0; f < 4; f++) {
+        const finger = new THREE.Mesh(geo, skin);
+        finger.scale.set(0.05, 0.026, 0.024);
+        finger.position.set(x * 0.22, 0.016, z - 0.0405 + f * 0.027);
+        this.group.add(finger);
+      }
     }
     this.group.visible = false;
   }
@@ -63,65 +122,241 @@ export class RodHands {
   }
 }
 
+/**
+ * 민장대: 릴·가이드 없이 여러 마디를 뽑아 쓰는 대.
+ * 끝마개 → 천 감기 손잡이 → 금속 감기·상표 띠 → 마디마다 굵은 테 → 가는 초릿대 → 릴리안.
+ * 고리 개수는 고정이고 매 프레임 정점 자리·법선만 다시 쓴다.
+ */
 export class Rod {
   readonly group = new THREE.Group();
   readonly tip = new THREE.Vector3();
   private readonly geo = new THREE.BufferGeometry();
   private readonly pos: Float32Array;
-  private readonly centers: THREE.Vector3[] = [];
+  private readonly nrm: Float32Array;
+  private readonly col: Float32Array;
+  private readonly idx: Uint16Array;
+  /** 고리별 길이 비율 · 반지름 · 축 방향 법선 여부 */
+  private readonly ss = new Float32Array(RINGS);
+  private readonly rr = new Float32Array(RINGS);
+  private readonly ax = new Uint8Array(RINGS);
+  private readonly cosT = new Float32Array(RADIAL);
+  private readonly sinT = new Float32Array(RADIAL);
   private readonly flexShape = new THREE.Vector3(0, -0.04, 0);
   private readonly flexVelocity = new THREE.Vector3();
   private readonly flexTarget = new THREE.Vector3();
   private readonly quiverDir = new THREE.Vector3();
   private readonly lastDir = new THREE.Vector3(0, 0, -1);
+  private readonly butt = new THREE.Vector3();
+  /** 초릿대 끝 릴리안 고리 */
+  private readonly loop: THREE.Mesh;
+  private readonly loopMat: THREE.MeshStandardMaterial;
+  private readonly look = {
+    blank: new THREE.Color(), accent: new THREE.Color(), grip: new THREE.Color(), brand: new THREE.Color(), lilian: new THREE.Color('#c8261c'),
+  };
+  /** setColor로 색을 정했으면 자동 색 조합을 쓰지 않는다 */
+  private custom = false;
+  /** 대 길이·휨 조합 (바뀌면 마디 배치·색을 다시 잡는다) */
+  private key = -1;
   private time = 0;
+  private L = ROD.length;
+  private bendStart = 0;
+  private deflLen = 0;
+  private quiver = 0;
 
   constructor() {
-    const n = (SEGS + 1) * RADIAL;
+    const n = RINGS * RADIAL;
     this.pos = new Float32Array(n * 3);
-    const col = new Float32Array(n * 3);
-    const grip = new THREE.Color('#1d1b19');
-    const blank = new THREE.Color('#354a38');
-    const wrap = new THREE.Color('#7a5a28');
-    const c = new THREE.Color();
-    for (let i = 0; i <= SEGS; i++) {
-      const s = this.sAt(i);
-      const m = s * ROD.length;
-      if (m < GRIP) c.copy(grip);
-      else c.copy(blank);
-      // 마디 이음새 띠 (민장대는 여러 마디를 뽑아 쓴다)
-      if (m > GRIP && Math.abs(((m - GRIP) % 0.9) - 0.9) < 0.025) c.copy(wrap);
-      for (let j = 0; j < RADIAL; j++) col.set([c.r, c.g, c.b], (i * RADIAL + j) * 3);
-      this.centers.push(new THREE.Vector3());
+    this.nrm = new Float32Array(n * 3);
+    this.col = new Float32Array(n * 3);
+    this.idx = new Uint16Array((RINGS - 1) * RADIAL * 6);
+    for (let j = 0; j < RADIAL; j++) {
+      const a = (j / RADIAL) * Math.PI * 2;
+      this.cosT[j] = Math.cos(a);
+      this.sinT[j] = Math.sin(a);
     }
-    const idx: number[] = [];
-    for (let i = 0; i < SEGS; i++) {
+    this.geo.setAttribute('position', new THREE.BufferAttribute(this.pos, 3));
+    this.geo.setAttribute('normal', new THREE.BufferAttribute(this.nrm, 3));
+    this.geo.setAttribute('color', new THREE.BufferAttribute(this.col, 3));
+    this.geo.setIndex(new THREE.BufferAttribute(this.idx, 1));
+    this.key = this.keyOf(ROD.length, ROD.flex);
+    this.pickLook(this.key);
+    this.layout(ROD.length);
+
+    // 옻칠 몸통: 맑은 코팅 광택 / 금속 장식 / 천·실 감기
+    const mats = [
+      new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: 0.32, metalness: 0.1, clearcoat: 1, clearcoatRoughness: 0.08 }),
+      new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.85, roughness: 0.28 }),
+      new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }),
+    ];
+    const mesh = new THREE.Mesh(this.geo, mats);
+    mesh.frustumCulled = false;
+    mesh.castShadow = true;
+    this.loopMat = new THREE.MeshStandardMaterial({ color: this.look.lilian, roughness: 0.9 });
+    this.loop = new THREE.Mesh(new THREE.TorusGeometry(0.0035, 0.0006, 5, 12), this.loopMat);
+    this.loop.frustumCulled = false;
+    this.group.add(mesh, this.loop);
+  }
+
+  /** 대 칠 색을 직접 정한다 (안 정하면 대 길이·휨으로 색 조합을 고른다) */
+  setColor(blank: THREE.ColorRepresentation, accent?: THREE.ColorRepresentation, grip?: THREE.ColorRepresentation) {
+    this.custom = true;
+    this.look.blank.set(blank);
+    if (accent !== undefined) this.look.accent.set(accent);
+    if (grip !== undefined) this.look.grip.set(grip);
+    this.key = -1;
+  }
+
+  private keyOf(length: number, flex: number) {
+    return Math.round(length * 100) * 1000 + Math.round(flex * 100);
+  }
+
+  private pickLook(key: number) {
+    const [blank, accent, grip, brand] = ROD_LOOKS[(Math.imul(key, 2654435761) >>> 0) % ROD_LOOKS.length];
+    this.look.blank.set(blank);
+    this.look.accent.set(accent);
+    this.look.grip.set(grip);
+    this.look.brand.set(brand);
+  }
+
+  /** 대 길이에 맞춰 마디·장식 자리, 색, 재질 묶음을 다시 잡는다 (대가 바뀔 때만) */
+  private layout(L: number) {
+    const K: Knot[] = [];
+    const P = this.look;
+    const add = (m: number, r: number, c: THREE.Color, mat: number, shade = 1, axial = false) =>
+      K.push({ s: Math.min(1, m / L), r, c: [c.r * shade, c.g * shade, c.b * shade], mat, axial });
+    const lerp = THREE.MathUtils.lerp;
+
+    // 끝마개: 뒤를 막는 원판 + 금속 테
+    add(0, 0, P.accent, METAL, 0.55, true);
+    add(0, 0.0116, P.accent, METAL, 0.55, true);
+    add(0.004, 0.0129, P.accent, METAL, 0.8);
+    add(0.026, 0.0129, P.accent, METAL, 0.8);
+    add(0.026, 0.0135, P.accent, METAL);
+    add(0.034, 0.0135, P.accent, METAL);
+    // 손잡이: 짙고 옅은 천 감기 띠가 번갈아, 가운데가 살짝 불룩
+    const g0 = 0.034;
+    const NB = 14;
+    const bw = (GRIP - g0) / NB;
+    const rg = (m: number) => 0.0122 + 0.0008 * Math.sin((Math.PI * (m - g0)) / (GRIP - g0));
+    for (let b = 0; b < NB; b++) {
+      const shade = b % 2 ? 0.62 : 1;
+      add(g0 + b * bw, rg(g0 + b * bw), P.grip, CLOTH, shade);
+      add(g0 + (b + 1) * bw, rg(g0 + (b + 1) * bw), P.grip, CLOTH, shade);
+    }
+    // 손잡이 위 금속 감기
+    add(GRIP, 0.0134, P.accent, METAL);
+    add(GRIP + 0.012, 0.0134, P.accent, METAL);
+    // 상표 띠: 짙은 칠에 가는 금줄 두 개
+    const p0 = GRIP + 0.012;
+    const p1 = GRIP + 0.14;
+    const rp = (m: number) => lerp(0.0121, 0.0117, (m - p0) / (p1 - p0));
+    add(p0, rp(p0), P.brand, LACQ);
+    for (const lm of [p0 + 0.045, p0 + 0.075]) {
+      add(lm, rp(lm), P.brand, LACQ);
+      add(lm, rp(lm) + 0.0003, P.accent, METAL);
+      add(lm + 0.003, rp(lm) + 0.0003, P.accent, METAL);
+      add(lm + 0.003, rp(lm + 0.003), P.brand, LACQ);
+    }
+    add(p1, rp(p1), P.brand, LACQ);
+    add(p1, 0.012, P.accent, METAL);
+    add(p1 + 0.006, 0.012, P.accent, METAL);
+
+    // 마디: 비슷한 길이로 나누고, 위 마디일수록 한 단계 가늘다 (뽑아 쓰는 대)
+    const n = THREE.MathUtils.clamp(Math.round(L / 1.15), 4, 7);
+    const a0 = 0.0117;
+    const aTip = 0.0033;
+    const rEnd = 0.0008;
+    const step = 0.9;
+    const w = Math.pow(aTip / a0, 1 / (n - 1)) / step;
+    let a = a0;
+    let m0 = p1 + 0.006;
+    for (let k = 0; k < n; k++) {
+      const shade = k % 2 ? 0.92 : 1;
+      if (k < n - 1) {
+        const jm = (L * (k + 1)) / n;
+        const b = a * w;
+        const cs = jm - 0.026;
+        add(m0, a, P.blank, LACQ, shade);
+        add(cs, lerp(a, b, (cs - m0) / (jm - m0)), P.blank, LACQ, shade);
+        // 마디 끝 보강: 약간 굵은 짙은 칠 띠 + 금속 테
+        add(cs, b + 0.0007, P.blank, LACQ, shade * 0.5);
+        add(jm - 0.007, b + 0.0007, P.blank, LACQ, shade * 0.5);
+        add(jm - 0.007, b + 0.0011, P.accent, METAL);
+        add(jm, b + 0.0011, P.accent, METAL);
+        a = b * step;
+        m0 = jm;
+      } else {
+        // 초릿대: 끝까지 가늘어지고, 끝에 붉은 릴리안 매듭
+        const lm = L - 0.035;
+        add(m0, a, P.blank, LACQ, shade);
+        add(lm, lerp(a, rEnd, (lm - m0) / (L - m0)), P.blank, LACQ, shade);
+        add(lm, 0.0014, P.lilian, CLOTH);
+        add(L - 0.007, 0.0014, P.lilian, CLOTH);
+        add(L - 0.006, 0.0022, P.lilian, CLOTH, 0.85);
+        add(L - 0.0015, 0.0022, P.lilian, CLOTH, 0.85);
+        add(L, 0.0005, P.lilian, CLOTH, 0.85);
+      }
+    }
+
+    // 남는 고리는 가장 긴 구간을 반씩 나눠 채운다 (휘는 모양이 매끄럽게)
+    while (K.length < RINGS) {
+      let best = 0;
+      let gap = -1;
+      for (let i = 0; i < K.length - 1; i++) {
+        const g = K[i + 1].s - K[i].s;
+        if (g > gap) { gap = g; best = i; }
+      }
+      const p = K[best];
+      const q = K[best + 1];
+      K.splice(best + 1, 0, {
+        s: (p.s + q.s) / 2, r: (p.r + q.r) / 2,
+        c: [(p.c[0] + q.c[0]) / 2, (p.c[1] + q.c[1]) / 2, (p.c[2] + q.c[2]) / 2], mat: p.mat, axial: false,
+      });
+    }
+
+    for (let i = 0; i < RINGS; i++) {
+      const k = K[i];
+      this.ss[i] = k.s;
+      this.rr[i] = k.r;
+      this.ax[i] = k.axial ? 1 : 0;
+      for (let j = 0; j < RADIAL; j++) this.col.set(k.c, (i * RADIAL + j) * 3);
+    }
+    // 재질별로 면을 모아 그리기 호출을 3번으로 줄인다. 두 고리 사이 면은 굵은 쪽 재질을 따른다
+    const lists: number[][] = [[], [], []];
+    for (let i = 0; i < RINGS - 1; i++) {
+      const p = K[i];
+      const q = K[i + 1];
+      const list = lists[q.r > p.r ? q.mat : p.mat];
       for (let j = 0; j < RADIAL; j++) {
         const a = i * RADIAL + j;
         const b = i * RADIAL + ((j + 1) % RADIAL);
-        idx.push(a, b, a + RADIAL, b, b + RADIAL, a + RADIAL);
+        list.push(a, a + RADIAL, b, b, a + RADIAL, b + RADIAL);
       }
     }
-    this.geo.setAttribute('position', new THREE.BufferAttribute(this.pos, 3));
-    this.geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-    this.geo.setIndex(idx);
-    const mat = new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: 0.35, clearcoat: 0.8, clearcoatRoughness: 0.15 });
-    const mesh = new THREE.Mesh(this.geo, mat);
-    mesh.frustumCulled = false;
-    mesh.castShadow = true;
-    this.group.add(mesh);
-
+    this.geo.clearGroups();
+    let o = 0;
+    for (let m = 0; m < 3; m++) {
+      this.idx.set(lists[m], o);
+      this.geo.addGroup(o, lists[m].length, m);
+      o += lists[m].length;
+    }
+    this.geo.index!.needsUpdate = true;
+    this.geo.attributes.color.needsUpdate = true;
+    this.loopMat?.color.copy(P.lilian);
   }
 
-  /** 마디 i → 대 길이 비율 (손잡이 쪽 촘촘) */
-  private sAt(i: number) {
-    return Math.pow(i / SEGS, 1.15);
+  /** 대 길이 비율 s 자리의 중심 (휨·떨림 포함) */
+  private spine(s: number, out: THREE.Vector3) {
+    // 휘기 시작하는 자리부터 끝에 힘을 받은 외팔보 모양
+    const u = s <= this.bendStart ? 0 : (s - this.bendStart) / (1 - this.bendStart);
+    const shape = (u * u * (3 - u)) / 2;
+    const shorten = 1 - 0.18 * this.deflLen * s * s;
+    out.copy(this.butt).addScaledVector(this.lastDir, this.L * s * shorten).addScaledVector(this.flexShape, this.L * shape);
+    // 초릿대 떨림: 끝으로 갈수록 크다
+    if (this.quiver > 0) out.addScaledVector(this.quiverDir, this.L * 0.01 * this.quiver * Math.sin(this.time * 38 + s * 4) * s ** 3);
+    return out;
   }
 
-  /**
-   * 대를 다시 그린다.
-   * @param pull 대 끝을 당기는 방향 (단위 벡터) / bend 0~1
-   */
   /**
    * 챔질·헤드셰이크 같은 순간 충격: 대가 그 방향으로 확 휘었다가 되돌아온다
    * @param amount 휨 속도 (대략 2~8)
@@ -132,6 +367,8 @@ export class Rod {
   }
 
   /**
+   * 대를 다시 그린다.
+   * @param pull 대 끝을 당기는 방향 (단위 벡터) / bend 0~1
    * @param action 휨새 0(연질, 허리까지)~1(경질, 끝만)
    * @param quiver 초릿대 떨림 0~1 (고기가 머리를 흔들 때)
    */
@@ -152,42 +389,56 @@ export class Rod {
     this.lastDir.copy(pose.dir);
     // 휨새: 힘이 약하면 초릿대만 휘고, 힘이 커질수록 휘는 자리가 허리·손잡이 쪽으로 내려온다
     const load = Math.min(1, defl.length() / (0.5 + flex * 0.18));
-    const start = THREE.MathUtils.clamp(action * 0.72 * (1 - load * 0.85), 0, 0.72);
+    this.bendStart = THREE.MathUtils.clamp(action * 0.72 * (1 - load * 0.85), 0, 0.72);
     this.quiverDir.crossVectors(pose.dir, UP).normalize();
-    for (let i = 0; i <= SEGS; i++) {
-      const s = this.sAt(i);
-      // 휘기 시작하는 자리부터 끝에 힘을 받은 외팔보 모양
-      const u = s <= start ? 0 : (s - start) / (1 - start);
-      const shape = (u * u * (3 - u)) / 2;
-      const shorten = 1 - 0.18 * defl.length() * s * s;
-      this.centers[i].copy(pose.butt).addScaledVector(pose.dir, L * s * shorten).addScaledVector(defl, L * shape);
-      // 초릿대 떨림: 끝으로 갈수록 크다
-      if (quiver > 0) this.centers[i].addScaledVector(this.quiverDir, L * 0.01 * quiver * Math.sin(this.time * 38 + s * 4) * s ** 3);
-    }
-    this.tip.copy(this.centers[SEGS]);
+    this.deflLen = defl.length();
+    this.quiver = quiver;
+    this.L = L;
+    this.butt.copy(pose.butt);
 
-    const side = v2;
-    const upv = v3;
-    for (let i = 0; i <= SEGS; i++) {
-      const s = this.sAt(i);
-      const m = s * L;
-      const t = new THREE.Vector3().subVectors(this.centers[Math.min(SEGS, i + 1)], this.centers[Math.max(0, i - 1)]).normalize();
+    // 대가 바뀌면 마디 배치·색을 다시 잡는다
+    const key = this.keyOf(L, flex);
+    if (key !== this.key) {
+      this.key = key;
+      if (!this.custom) this.pickLook(key);
+      this.layout(L);
+    }
+
+    const c = w1;
+    const t = w2;
+    const side = w3;
+    const upv = w4;
+    const pos = this.pos;
+    const nrm = this.nrm;
+    for (let i = 0; i < RINGS; i++) {
+      const s = this.ss[i];
+      this.spine(s, c);
+      this.spine(Math.min(1, s + 0.004), t);
+      t.sub(this.spine(Math.max(0, s - 0.004), w5)).normalize();
       side.crossVectors(t, UP).normalize();
-      upv.crossVectors(side, t).normalize();
-      let r = 0.013 * (1 - s) + 0.0015;
-      if (m < GRIP) r = m < 0.03 ? 0.011 : 0.0128;
+      upv.crossVectors(side, t);
+      const r = this.rr[i];
+      const axial = this.ax[i] === 1;
       for (let j = 0; j < RADIAL; j++) {
-        const a = (j / RADIAL) * Math.PI * 2;
         const k = (i * RADIAL + j) * 3;
-        const c = this.centers[i];
-        this.pos[k] = c.x + (side.x * Math.cos(a) + upv.x * Math.sin(a)) * r;
-        this.pos[k + 1] = c.y + (side.y * Math.cos(a) + upv.y * Math.sin(a)) * r;
-        this.pos[k + 2] = c.z + (side.z * Math.cos(a) + upv.z * Math.sin(a)) * r;
+        const nx = side.x * this.cosT[j] + upv.x * this.sinT[j];
+        const ny = side.y * this.cosT[j] + upv.y * this.sinT[j];
+        const nz = side.z * this.cosT[j] + upv.z * this.sinT[j];
+        pos[k] = c.x + nx * r;
+        pos[k + 1] = c.y + ny * r;
+        pos[k + 2] = c.z + nz * r;
+        // 끝마개 면은 뒤쪽을, 나머지는 바깥을 본다
+        if (axial) { nrm[k] = -t.x; nrm[k + 1] = -t.y; nrm[k + 2] = -t.z; }
+        else { nrm[k] = nx; nrm[k + 1] = ny; nrm[k + 2] = nz; }
       }
     }
+    // 마지막 고리(s = 1)가 초릿대 끝
+    this.tip.copy(c);
+    // 릴리안 고리: 초릿대 끝에서 대 방향으로 늘어진 작은 고리
+    this.loop.position.copy(c).addScaledVector(t, 0.0035);
+    this.loop.quaternion.setFromUnitVectors(FWD, side);
     this.geo.attributes.position.needsUpdate = true;
-    this.geo.computeVertexNormals();
-
+    this.geo.attributes.normal.needsUpdate = true;
   }
 }
 
@@ -358,6 +609,11 @@ export class Float {
     // 찌다리
     const footTop = -0.045 - look.body;
     add(new THREE.CylinderGeometry(0.0012, 0.0012, look.foot, 6), new THREE.MeshStandardMaterial({ color: '#d8d0b0' }), footTop - look.foot / 2 + 0.01);
+    // 찌다리 끝을 꽂은 찌고무와 그 아래 찌멈춤 구슬 (원줄에 끼워진 모습)
+    const footBot = footTop - look.foot + 0.01;
+    add(new THREE.CylinderGeometry(0.0021, 0.0017, 0.012, 8), new THREE.MeshStandardMaterial({ color: '#2b3a2a', roughness: 0.6 }), footBot + 0.004);
+    const bead = new THREE.MeshStandardMaterial({ color: '#e8742a', roughness: 0.4 });
+    for (const dy of [-0.008, -0.0135]) add(new THREE.SphereGeometry(0.0017, 8, 6), bead, footBot + dy).scale.y = 1.5;
   }
 
   /** tilt 0 서 있음 ~ 1 수면에 누움. yaw: 눕는 방향 */

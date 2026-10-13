@@ -29,6 +29,10 @@
 .dock-message b { flex: 0 0 auto; max-width: 40%; color: #c5dba3; }
 .dock-message.mine b { color: #a2d7ef; }
 .dock-message span { min-width: 0; white-space: pre-wrap; }
+.dock-message.catch-log { flex-wrap: wrap; column-gap: 6px; row-gap: 0; color: #eed697; }
+.catch-log .catch-log-label { flex: 0 0 auto; font-size: 9px; color: #d7bc75; }
+.catch-log b { max-width: calc(100% - 36px); }
+.catch-log span { flex: 1 1 180px; color: #eed697; }
 .chat-hint { font-size: 11px; color: #d5dbc1; margin: 8px 0; }
 .dock-compose { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; padding: 6px; border-top: 1px solid #8a997555; }
 .dock-compose input { min-width: 0; padding: 9px; font: inherit; font-size: 12px; background: #061019a8; border: 1px solid #8e9d71; color: #fff; outline-color: #c6dd8d; border-radius: 0; user-select: text; }

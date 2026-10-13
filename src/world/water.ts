@@ -184,8 +184,8 @@ const WaterShader = {
       float spec = pow(max(dot(N, H), 0.0), 600.0) * 9.0 + pow(max(dot(N, H), 0.0), 90.0) * 0.25;
       col += uSunColor * spec * uGlint;
 
-      // 아주 얕은 물가는 바닥이 비친다
-      float alpha = clamp(smoothstep(0.0, 0.55, depth) * 0.9 + F * 0.6, 0.0, 1.0);
+      // 얕은 물가는 바닥이 비친다. 완전히 투명해지면 계단식 바닥 경계가 드러나므로 수면 색을 조금은 남긴다
+      float alpha = clamp(0.35 + smoothstep(0.0, 1.2, depth) * 0.6 + F * 0.5, 0.0, 1.0);
       gl_FragColor = vec4(col, alpha);
       #include <tonemapping_fragment>
       #include <colorspace_fragment>

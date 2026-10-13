@@ -82,3 +82,113 @@
   #hud .quality-shop .tackle-actions { order: 3; grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   #hud .quality-shop .tackle-actions .btn { min-height: 34px; }
 }
+
+/* 원줄·바늘: 1차 제품 카드 → 2차 제품 화면 */
+#hud .quality-shop .shop-list.detail { display: block; }
+#hud .quality-shop .tackle-card {
+  position: relative; display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 12px; align-items: stretch; min-width: 0;
+  padding: 12px; text-align: left; font: inherit; color: var(--ink); cursor: pointer;
+  border: 2px solid #7a8669; background: #c3c6b0; box-shadow: inset 2px 2px #e1e4d1, inset -2px -2px #a0a78e;
+}
+#hud .quality-shop .tackle-card:hover { background: #cdd4b6; }
+#hud .quality-shop .tackle-card:active { transform: translate(1px, 1px); }
+#hud .quality-shop .tackle-card.has-owned { box-shadow: inset 4px 0 #739346, inset 2px 2px #e1e4d1, inset -2px -2px #a0a78e; }
+#hud .quality-shop :is(.tackle-card-art, .tackle-hero-art) {
+  position: relative; display: grid; place-items: center; width: 84px; height: 84px; align-self: start;
+  background: #8b8b8b; box-shadow: inset 2px 2px #373737, inset -2px -2px #fff;
+}
+#hud .quality-shop .tackle-card-art .slot-art { width: 68px; height: 68px; }
+#hud .quality-shop .tackle-card.locked .tackle-card-art .slot-art { opacity: 0.45; filter: grayscale(0.8); }
+#hud .quality-shop .tackle-card-art .lock { position: absolute; right: -4px; bottom: -4px; width: 26px; height: 26px; }
+#hud .quality-shop .tackle-card-art .lock svg { width: 100%; height: 100%; image-rendering: pixelated; }
+#hud .quality-shop .tackle-card-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+#hud .quality-shop .tackle-card-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; min-height: 18px; }
+#hud .quality-shop .tackle-card-tags .item-quality { margin: 0; }
+#hud .quality-shop .tackle-owned { padding: 1px 5px; font-size: 10px; color: #f3f6e4; background: #5f7f3a; }
+#hud .quality-shop .tackle-card-body > b { font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; }
+#hud .quality-shop .tackle-card-body > small { font-size: 10px; color: #59634b; }
+#hud .quality-shop .tackle-card-meta { font-size: 10px; color: #3f4836; font-variant-numeric: tabular-nums; }
+#hud .quality-shop .tackle-card-price { margin-top: auto; padding-top: 4px; font-size: 12px; font-weight: 700; color: #364821; font-variant-numeric: tabular-nums; }
+#hud .quality-shop .tackle-card.locked .tackle-card-price { color: #7a4a2e; }
+
+#hud .quality-shop .tackle-detail {
+  min-width: 0; padding: 16px; border: 2px solid #7a8669; background: #c3c6b0;
+  box-shadow: inset 2px 2px #e1e4d1, inset -2px -2px #a0a78e; color: var(--ink); font-size: 12px; font-variant-numeric: tabular-nums;
+}
+#hud .quality-shop .tackle-back { margin-bottom: 14px; }
+#hud .quality-shop .tackle-hero { display: grid; grid-template-columns: 128px minmax(0, 1fr); gap: 18px; align-items: start; }
+#hud .quality-shop .tackle-hero-art { width: 128px; height: 128px; }
+#hud .quality-shop .tackle-hero-art .slot-art { width: 104px; height: 104px; }
+#hud .quality-shop .tackle-hero h3 { margin: 4px 0 2px; font-size: 17px; line-height: 1.4; overflow-wrap: anywhere; }
+#hud .quality-shop .tackle-purpose { margin: 0; font-size: 11px; font-weight: 700; }
+#hud .quality-shop .tackle-desc { margin: 6px 0 0; font-size: 11px; line-height: 1.6; color: #4b5540; }
+#hud .quality-shop .tackle-hero .tackle-traits { margin: 10px 0 0; }
+#hud .quality-shop .tackle-detail > .tackle-comparison { margin: 14px 0 0; }
+#hud .quality-shop .tackle-detail > .tackle-tradeoff { margin: 12px 0 0; padding: 8px 10px; background: #d2d5c1; border-left: 3px solid #8c9879; }
+#hud .quality-shop .tackle-sizes { margin: 18px 0 4px; font-size: 12px; }
+@container (max-width: 580px) {
+  #hud .quality-shop .tackle-detail { padding: 10px; }
+  #hud .quality-shop .tackle-hero { grid-template-columns: 88px minmax(0, 1fr); gap: 12px; }
+  #hud .quality-shop .tackle-hero-art { width: 88px; height: 88px; }
+  #hud .quality-shop .tackle-hero-art .slot-art { width: 70px; height: 70px; }
+  #hud .quality-shop .tackle-card { grid-template-columns: 64px minmax(0, 1fr); }
+  #hud .quality-shop .tackle-card-art { width: 64px; height: 64px; }
+  #hud .quality-shop .tackle-card-art .slot-art { width: 50px; height: 50px; }
+}
+body.touch #hud .quality-shop .tackle-card { min-height: 44px; }
+
+/* 다른 상품: 카드 안의 '자세히' 영역과 소모품 바로 구매 */
+#hud .quality-shop .shop-tile { display: flex; padding: 0; cursor: default; }
+#hud .quality-shop .shop-tile:active { transform: none; }
+#hud .quality-shop .shop-tile-open {
+  flex: 1; display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 12px; align-items: stretch; min-width: 0;
+  padding: 12px; margin: 0; text-align: left; font: inherit; color: inherit; background: none; border: 0; box-shadow: none; cursor: pointer;
+}
+#hud .quality-shop .shop-tile-open:active { transform: translate(1px, 1px); }
+#hud .quality-shop .shop-tile-buy { position: absolute; right: 10px; bottom: 10px; min-width: 56px; }
+#hud .quality-shop .shop-tile .tackle-card-body > b { color: var(--ink); }
+#hud .quality-shop .tackle-held { padding: 1px 5px; font-size: 10px; color: #3f4836; background: #d4d7c2; border: 1px solid #a3ac91; }
+#hud .quality-shop .shop-list > .shop-section { margin: 14px 0 2px; font-size: 13px; }
+#hud .quality-shop .shop-list > .shop-section:first-child { margin-top: 0; }
+
+#hud .quality-shop .shop-specs { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px; margin: 16px 0 0; }
+#hud .quality-shop .shop-specs > div { padding: 8px 10px; background: #d4d7c2; border: 1px solid #a3ac91; }
+#hud .quality-shop .shop-specs dt { font-size: 10px; color: #606951; }
+#hud .quality-shop .shop-specs dd { margin: 3px 0 0; font-size: 13px; font-weight: 700; overflow-wrap: anywhere; }
+#hud .quality-shop .shop-detail-note { margin: 12px 0 0; font-size: 10px; line-height: 1.6; color: #59634b; }
+#hud .quality-shop .shop-detail-note .product-note { display: block; }
+#hud .quality-shop .shop-detail-buy { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; margin-top: 16px; padding-top: 14px; border-top: 2px solid #8c9879; }
+#hud .quality-shop .shop-detail-buy small { display: block; font-size: 10px; color: #606951; }
+#hud .quality-shop .shop-detail-buy strong { font-size: 18px; color: #364821; }
+#hud .quality-shop .shop-detail-buy .tackle-actions { grid-template-columns: repeat(2, minmax(96px, auto)); }
+#hud .quality-shop .shop-detail-buy .tackle-actions .btn { min-height: 34px; font-size: 12px; }
+@container (max-width: 580px) {
+  #hud .quality-shop .shop-tile-open { grid-template-columns: 64px minmax(0, 1fr); }
+  #hud .quality-shop .shop-detail-buy .tackle-actions { width: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* 제조사 탐색: 브랜드별 시그니처와 기존 성능 비교를 함께 보여준다. */
+#hud .quality-shop .shop-filters .record-tabs:first-child { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 3px; }
+#hud .quality-shop .shop-brand-group { grid-column: 1 / -1; min-width: 0; }
+#hud .quality-shop .shop-brand-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 11px; margin: 2px 0 7px; border-left: 3px solid #667d48; background: #d2d7c1; }
+#hud .quality-shop .shop-brand-heading > div { display: grid; gap: 2px; min-width: 0; }
+#hud .quality-shop .shop-brand-heading b { font-size: 13px; }
+#hud .quality-shop .shop-brand-heading small { color: #59634b; font-size: 10px; line-height: 1.5; }
+#hud .quality-shop .shop-brand-heading > span { flex: 0 0 auto; color: #59634b; font-size: 10px; }
+#hud .quality-shop .shop-brand-items { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 8px; }
+#hud .quality-shop .shop-brand-tag { display: inline-block; padding: 1px 5px; color: #f3f6e4; background: #536b3c; font-size: 10px; line-height: 1.6; }
+#hud .quality-shop .shop-brand-signature { margin: 7px 0 0; color: #52643b; font-size: 10px; line-height: 1.55; }
+#hud .quality-shop .shop-brand-story { margin-top: 10px; padding: 8px 10px; border-left: 2px solid #8c9879; background: #d2d5c1; color: #4b5540; font-size: 10px; line-height: 1.6; }
+#hud .quality-shop .shop-brand-story summary { cursor: pointer; font-weight: 700; }
+#hud .quality-shop .shop-brand-story p { margin: 7px 0 0; }
+#hud .quality-shop .shop-brand-intro { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; padding: 9px 11px; margin: 0 0 10px; border: 1px solid #8c9879; background: #d2d7c1; }
+#hud .quality-shop .shop-brand-intro > div { display: grid; gap: 2px; }
+#hud .quality-shop .shop-brand-intro b { font-size: 13px; }
+#hud .quality-shop .shop-brand-intro small { color: #59634b; font-size: 10px; line-height: 1.5; }
+#hud .quality-shop .shop-brand-intro details { flex: 0 0 100%; color: #4b5540; font-size: 10px; line-height: 1.6; }
+#hud .quality-shop .shop-brand-intro summary { cursor: pointer; }
+#hud .quality-shop .shop-brand-intro p { margin: 5px 0 0; }
+@container (max-width: 580px) {
+  #hud .quality-shop .shop-brand-items { grid-template-columns: 1fr; }
+  #hud .quality-shop .shop-brand-heading { align-items: flex-start; }
+}

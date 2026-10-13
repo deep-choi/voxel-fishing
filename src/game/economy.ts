@@ -23,7 +23,7 @@ export function fishValue(id: SpeciesId, cm: number, kg: number, tradeLevel = 0)
 
 // ── 일일 의뢰 ─────────────────────────────
 
-export type QuestKind = 'catch' | 'weight' | 'release' | 'chum' | 'sell';
+export type QuestKind = 'catch' | 'weight' | 'release' | 'sell';
 export interface QuestDef { id: string; kind: QuestKind; species?: SpeciesId; target: number; text: string; coins: number; xp: number }
 export interface QuestState { id: string; progress: number; claimed: boolean }
 
@@ -32,12 +32,12 @@ const QUEST_POOL: Omit<QuestDef, 'id'>[] = [
   { kind: 'catch', species: 'carp', target: 2, text: '잉어 2마리 낚기', coins: 260, xp: 140 },
   { kind: 'catch', species: 'bluegill', target: 6, text: '블루길 6마리 퇴치', coins: 120, xp: 60 },
   { kind: 'catch', species: 'bass', target: 2, text: '배스 2마리 퇴치', coins: 200, xp: 100 },
-  { kind: 'catch', species: 'catfish', target: 1, text: '메기 1마리 낚기 (밤에 유리)', coins: 220, xp: 120 },
+  { kind: 'catch', species: 'catfish', target: 1, text: '메기 1마리 낚기', coins: 220, xp: 120 },
   { kind: 'catch', species: 'mirror', target: 2, text: '향어 2마리 낚기', coins: 240, xp: 130 },
   { kind: 'weight', target: 2, text: '2kg 넘는 고기 낚기', coins: 300, xp: 160 },
   { kind: 'release', target: 4, text: '고기 4마리 방생하기', coins: 100, xp: 90 },
-  { kind: 'chum', target: 5, text: '집어 떡밥 5번 뿌리기', coins: 80, xp: 50 },
-  { kind: 'sell', target: 500, text: '살림망을 팔아 500원 벌기', coins: 120, xp: 70 },
+  { kind: 'catch', target: 5, text: '물고기 5마리 낚기', coins: 80, xp: 50 },
+  { kind: 'sell', target: 500, text: '어시장에서 500원어치 팔기', coins: 120, xp: 70 },
 ];
 
 export function dailyQuests(day = today()): QuestDef[] {

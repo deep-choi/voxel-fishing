@@ -4,7 +4,7 @@ import { auth, db } from './firebase';
 import { ACTIVE_FISHERY, FISHERIES, type FisheryId } from './fisheries';
 import type { Catch } from './fishing';
 import { SPECIES_LIST, type SpeciesId } from './data';
-import { emptyOnlineState, type OnlineState, type OnlineTab, type ChatMessage, type RankingEntry } from './onlineState';
+import { emptyOnlineState, type LocalPlayerPose, type OnlineState, type OnlineTab, type ChatMessage, type RankingEntry } from './onlineState';
 import { FisheryPresence } from './presence';
 
 const atMillis = (value: unknown) => (value as Timestamp | undefined)?.toMillis?.() ?? 0;
@@ -73,6 +73,7 @@ export class OnlineService {
   }
   async logout() { await this.presence.leave(); await signOut(auth); }
   async enterFishery() { await this.presence.enter(this.state.nickname); }
+  updatePlayerPose(pose: LocalPlayerPose) { this.presence.updatePose(pose); }
   async setNickname(raw: string) {
     if (!this.user || this.state.busy) return;
     const nickname = raw.trim().normalize('NFC');
@@ -147,6 +148,23 @@ export class OnlineService {
       await batch.commit(); this.sentAt = Date.now(); return true;
     } catch (error) { this.state.error = message(error); return false; }
     finally { this.state.busy = false; this.emit(); }
+  }
+  /** 랜딩한 물고기 한 마리를 낚시터 채팅에 기록한다. 일반 채팅의 전송 간격과는 독립적이다. */
+  async announceCatch(c: Catch) {
+    const user = this.user, nickname = this.state.nickname, membership = this.presence.membership();
+    if (!user || !nickname || !membership) return false;
+    const catchId = c.id ??= crypto.randomUUID();
+    const entry = doc(db, 'rooms', ACTIVE_FISHERY.id, 'messages', `catch_${user.uid}_${catchId}`);
+    await runTransaction(db, async tx => {
+      const existing = await tx.get(entry);
+      if (existing.exists()) return;
+      tx.set(entry, {
+        kind: 'catch', catchId, uid: user.uid, nickname,
+        speciesId: c.species.id, cm: c.cm, kg: c.kg,
+        createdAt: serverTimestamp(), ...membership,
+      });
+    });
+    return true;
   }
   async submitCatch(c: Catch) {
     if (!this.user || !this.state.nickname) return;

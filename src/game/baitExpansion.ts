@@ -47,11 +47,11 @@ const VARIANTS: Record<BaitId | 'chum', Variant[]> = {
     ['특선 향어 어분', '특선 어분 · 향어', '향어 선택성을 높인 자체 배합. 잉어에는 중간 등급 배합이 더 유리할 수 있다.', { mirror: 1.95, carp: 0.8, crucian: 0.4, bluegill: 0.3 }],
   ],
   chum: [
-    ['보리 집어떡밥', '곡물 집어 · 붕어·잉어', '곡물 향을 중심으로 붕어·잉어를 모으는 기본 배합.', { crucian: 1.1, carp: 1.05, mirror: 0.9 }],
-    ['잉향 집어떡밥', '어분 집어 · 잉어·향어', '어분 향으로 잉어·향어를 모은다. 붕어에는 덜 유리하다.', { carp: 1.2, mirror: 1.3, crucian: 0.75 }],
-    ['붕어 집중 집어떡밥', '글루텐 집어 · 붕어', '붕어 중심 집어. 잉어·향어를 모으는 효과는 낮다.', { crucian: 1.5, carp: 0.65, mirror: 0.55 }],
-    ['잉어 발효 집어떡밥', '옥수수 집어 · 잉어', '잉어를 모으는 곡물 배합. 붕어·향어에는 덜 맞는다.', { carp: 1.65, mirror: 0.6, crucian: 0.45 }],
-    ['특선 향어 집어떡밥', '특선 어분 집어 · 향어', '향어에 집중한 어분 집어. 모든 어종을 더 많이 모으는 만능 배합은 아니다.', { mirror: 1.8, carp: 0.55, crucian: 0.3, bluegill: 0.4 }],
+    ['보리 배합떡밥', '곡물 · 붕어·잉어', '바늘에 다는 곡물 향 중심의 붕어·잉어용 배합.', { crucian: 1.1, carp: 1.05, mirror: 0.9 }],
+    ['잉향 배합떡밥', '어분 · 잉어·향어', '바늘에 다는 잉어·향어용 어분 배합. 붕어에는 덜 유리하다.', { carp: 1.2, mirror: 1.3, crucian: 0.75 }],
+    ['붕어 집중 배합떡밥', '글루텐 · 붕어', '바늘에 다는 붕어용 글루텐 배합. 잉어·향어에는 덜 유리하다.', { crucian: 1.5, carp: 0.65, mirror: 0.55 }],
+    ['잉어 발효 배합떡밥', '옥수수 · 잉어', '바늘에 다는 잉어용 곡물 배합. 붕어·향어에는 덜 맞는다.', { carp: 1.65, mirror: 0.6, crucian: 0.45 }],
+    ['특선 향어 배합떡밥', '특선 어분 · 향어', '바늘에 다는 향어용 어분 배합. 모든 어종에 유리한 만능 배합은 아니다.', { mirror: 1.8, carp: 0.55, crucian: 0.3, bluegill: 0.4 }],
   ],
 };
 const BASE_PRICE: Record<BaitId | 'chum', number> = { worm: 30, shrimp: 65, corn: 35, paste: 40, gluten: 45, pellet: 50, chum: 60 };
@@ -59,13 +59,12 @@ const FLAVORS: BaitId[] = ['paste', 'pellet', 'gluten', 'corn', 'pellet'];
 
 /** 버들못 상점의 게임 전용 선별·배합 상품. 실존 제조사 제품명·출처를 만들지 않는다. */
 export function createHouseBaits(): BaitProduct[] {
-  return (Object.entries(VARIANTS) as [BaitId | 'chum', Variant[]][]).flatMap(([baseBait, variants]) => variants.map(([name, purpose, desc, speciesAffinity], index) => ({
-    id: `house-${baseBait}-${index + 1}`, name: `버들못 ${name}`, baseBait,
-    count: baseBait === 'chum' ? 5 : 10, price: Math.round(BASE_PRICE[baseBait] * [1, 2, 4, 7, 11][index]),
+  return (Object.entries(VARIANTS) as [BaitId | 'chum', Variant[]][]).flatMap(([series, variants]) => variants.map(([name, purpose, desc, speciesAffinity], index) => ({
+    id: `house-${series}-${index + 1}`, name: `버들못 ${name}`, baseBait: series === 'chum' ? FLAVORS[index] : series,
+    count: series === 'chum' ? 5 : 10, price: Math.round(BASE_PRICE[series] * [1, 2, 4, 7, 11][index]),
     level: [1, 2, 4, 7, 10][index], qualityTier: (index + 1) as 1 | 2 | 3 | 4 | 5,
     origin: 'house', facts: '버들못 자체 선별·배합 · 게임 전용 상품', purpose, desc, speciesAffinity,
     // 품질을 만능 입질 배율로 쓰지 않고 어종별 선호로 구별한다.
-    biteScale: 1, chumScale: baseBait === 'chum' ? [1, 1.08, 1.15, 1.22, 1.3][index] : 1,
-    chumFlavor: baseBait === 'chum' ? FLAVORS[index] : undefined,
+    biteScale: 1, chumScale: series === 'chum' ? [1, 1.08, 1.15, 1.22, 1.3][index] : 1,
   })));
 }

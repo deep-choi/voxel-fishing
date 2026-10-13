@@ -1,19 +1,24 @@
-import { collection, doc, limit, onSnapshot, query, runTransaction, serverTimestamp, type DocumentReference, type Timestamp, type Unsubscribe } from 'firebase/firestore';
+import { collection, doc, limit, onSnapshot, query, runTransaction, serverTimestamp, updateDoc, type DocumentReference, type Timestamp, type Unsubscribe } from 'firebase/firestore';
 import { db } from './firebase';
 import { ACTIVE_FISHERY, FISHERIES, FISHERY_CAPACITY, canEnterFishery, type FisheryId } from './fisheries';
+import type { LocalPlayerPose, RemoteHeldRodState, RemotePlayerState, RemoteRodState } from './onlineState';
 
 // Firestore에는 onDisconnect가 없어 서버 시각으로 찍은 자리 임대를 갱신한다.
 // firestore.rules의 임대 만료 시간과 맞춘다. 비정상 종료도 최대 150초 뒤 자리가 열린다.
 const LEASE_MS = 150_000;
 const HEARTBEAT_MS = 40_000;
-type Seat = { uid: string; sessionId: string; updatedAt: number };
+type Seat = {
+  uid: string; nickname: string; sessionId: string; updatedAt: number;
+  x?: number; z?: number; yaw?: number; rodSlots?: RemoteRodState[]; heldRod?: RemoteHeldRodState | null;
+};
 export interface PresenceState {
   admitted: boolean; entering: boolean; admissionError: string;
   fisheryCounts: Partial<Record<FisheryId, number>>;
+  players: RemotePlayerState[];
 }
 
 export class FisheryPresence {
-  readonly state: PresenceState = { admitted: false, entering: false, admissionError: '', fisheryCounts: {} };
+  readonly state: PresenceState = { admitted: false, entering: false, admissionError: '', fisheryCounts: {}, players: [] };
   private uid: string | null = null;
   private readonly sessionId = crypto.randomUUID();
   private epoch = 0;
@@ -26,6 +31,11 @@ export class FisheryPresence {
   private clock?: ReturnType<typeof setInterval>;
   private heartbeat?: ReturnType<typeof setInterval>;
   private refreshing = false;
+  private pendingPose: LocalPlayerPose | null = null;
+  private poseTimer?: ReturnType<typeof setTimeout>;
+  private poseWriting = false;
+  private lastPoseSignature = '';
+  private lastPoseSent = 0;
 
   constructor(private readonly changed: (state: PresenceState) => void) {
     addEventListener('pagehide', () => { void this.leave(); });
@@ -41,8 +51,10 @@ export class FisheryPresence {
     this.uid = uid; this.nickname = ''; this.seat = null;
     this.stops.forEach(stop => stop()); this.stops = [];
     clearInterval(this.clock); clearInterval(this.heartbeat);
+    clearTimeout(this.poseTimer); this.poseTimer = undefined; this.pendingPose = null;
+    this.lastPoseSignature = ''; this.lastPoseSent = 0;
     this.snapshots.clear();
-    Object.assign(this.state, { admitted: false, entering: false, admissionError: '', fisheryCounts: {} });
+    Object.assign(this.state, { admitted: false, entering: false, admissionError: '', fisheryCounts: {}, players: [] });
     this.emit();
     if (!uid) return;
     const epoch = this.epoch;
@@ -52,7 +64,16 @@ export class FisheryPresence {
         const seats = new Map<string, Seat>();
         for (const entry of snapshot.docs) {
           const data = entry.data({ serverTimestamps: 'estimate' });
-          seats.set(entry.id, { uid: data.uid, sessionId: data.sessionId, updatedAt: (data.updatedAt as Timestamp | undefined)?.toMillis() ?? 0 });
+          seats.set(entry.id, {
+            uid: data.uid, nickname: data.nickname, sessionId: data.sessionId,
+            updatedAt: (data.updatedAt as Timestamp | undefined)?.toMillis() ?? 0,
+            ...(typeof data.x === 'number' ? { x: data.x } : {}),
+            ...(typeof data.z === 'number' ? { z: data.z } : {}),
+            ...(typeof data.yaw === 'number' ? { yaw: data.yaw } : {}),
+            ...(Array.isArray(data.rodSlots) ? { rodSlots: data.rodSlots as RemoteRodState[] } : {}),
+            ...(data.heldRod === null || data.heldRod === undefined || typeof data.heldRod === 'object'
+              ? { heldRod: data.heldRod as RemoteHeldRodState | null | undefined } : {}),
+          });
         }
         this.snapshots.set(fishery.id, seats);
         if (fishery.id === ACTIVE_FISHERY.id && this.state.admitted && this.seat) {
@@ -76,10 +97,21 @@ export class FisheryPresence {
     for (const [map, seats] of this.snapshots) {
       this.state.fisheryCounts[map] = new Set([...seats.values()].filter(seat => seat.updatedAt > Date.now() - LEASE_MS).map(seat => seat.uid)).size;
     }
+    const now = Date.now();
+    this.state.players = [...(this.snapshots.get(ACTIVE_FISHERY.id)?.values() ?? [])]
+      .filter(seat => seat.uid !== this.uid && seat.updatedAt > now - LEASE_MS
+        && typeof seat.x === 'number' && typeof seat.z === 'number' && typeof seat.yaw === 'number')
+      .map(seat => ({
+        uid: seat.uid, nickname: seat.nickname, x: seat.x!, z: seat.z!, yaw: seat.yaw!,
+        rodSlots: (seat.rodSlots ?? []).filter((rod): rod is RemoteRodState => !!rod && typeof rod.slotId === 'string' && typeof rod.rodId === 'string').slice(0, 3),
+        heldRod: seat.heldRod && typeof seat.heldRod.rodId === 'string' ? seat.heldRod : null,
+        updatedAt: seat.updatedAt,
+      }));
     this.emit();
   }
   private revoke(reason: string) {
     clearInterval(this.heartbeat);
+    clearTimeout(this.poseTimer); this.poseTimer = undefined; this.pendingPose = null; this.lastPoseSignature = '';
     this.state.admitted = false; this.state.admissionError = reason; this.emit();
   }
 
@@ -87,6 +119,7 @@ export class FisheryPresence {
     this.nickname = nickname;
     if (!this.uid || !nickname || this.state.admitted || this.state.entering) return;
     if (!canEnterFishery(ACTIVE_FISHERY.id)) { this.revoke('아직 개방하지 않은 낚시터예요'); return; }
+    this.lastPoseSignature = ''; this.pendingPose = null;
     this.state.entering = true; this.state.admissionError = ''; this.emit();
     const uid = this.uid, epoch = this.epoch, operation = ++this.operation;
     try {
@@ -134,10 +167,53 @@ export class FisheryPresence {
 
   membership() { return this.state.admitted && this.seat ? { slotId: this.seat.id, sessionId: this.sessionId } : null; }
   setNickname(nickname: string) { this.nickname = nickname; }
+  updatePose(pose: LocalPlayerPose) {
+    if (!this.state.admitted || !this.seat) return;
+    const round = (value: number) => Math.round(value * 10) / 10;
+    const clean: LocalPlayerPose = {
+      x: round(pose.x), z: round(pose.z), yaw: round(pose.yaw),
+      rodSlots: pose.rodSlots.slice(0, 3).map(rod => ({ slotId: rod.slotId, rodId: rod.rodId })),
+      heldRod: pose.heldRod ? {
+        rodId: pose.heldRod.rodId,
+        buttX: round(pose.heldRod.buttX), buttY: round(pose.heldRod.buttY), buttZ: round(pose.heldRod.buttZ),
+        dirX: round(pose.heldRod.dirX), dirY: round(pose.heldRod.dirY), dirZ: round(pose.heldRod.dirZ),
+      } : null,
+    };
+    const signature = JSON.stringify(clean);
+    if (signature === this.lastPoseSignature) return;
+    this.lastPoseSignature = signature;
+    this.pendingPose = clean;
+    if (this.poseTimer || this.poseWriting) return;
+    this.schedulePoseWrite();
+  }
+
+  private schedulePoseWrite() {
+    if (!this.pendingPose || !this.state.admitted || !this.seat) return;
+    const delay = Math.max(0, 500 - (Date.now() - this.lastPoseSent));
+    this.poseTimer = setTimeout(() => { this.poseTimer = undefined; void this.flushPose(); }, delay);
+  }
+
+  private async flushPose() {
+    const ref = this.seat, uid = this.uid, epoch = this.epoch, pose = this.pendingPose;
+    if (!pose || !ref || !uid || !this.state.admitted || this.poseWriting) return;
+    this.pendingPose = null;
+    this.poseWriting = true;
+    this.lastPoseSent = Date.now();
+    try {
+      await updateDoc(ref, { ...pose, updatedAt: serverTimestamp() });
+      if (epoch === this.epoch && this.state.admitted) this.lastAck = Date.now();
+    } catch { /* 자리 임대 갱신이 계속 실패하면 heartbeat에서 입장을 회수한다. */ }
+    finally {
+      this.poseWriting = false;
+      if (this.pendingPose) this.schedulePoseWrite();
+    }
+  }
+
   async leave() {
     ++this.operation;
     const ref = this.seat, uid = this.uid;
     this.seat = null; clearInterval(this.heartbeat);
+    clearTimeout(this.poseTimer); this.poseTimer = undefined; this.pendingPose = null; this.lastPoseSignature = '';
     this.state.admitted = false; this.state.entering = false; this.emit();
     if (!ref || !uid || !navigator.onLine) return;
     try {

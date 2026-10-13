@@ -4,6 +4,7 @@ import { SIZE_RANKS } from './sizeRanks';
 import { EXPANDED_FLOATS, EXPANDED_HOOKS, EXPANDED_LINES, EXPANDED_RODS, EXPANDED_ROD_ACTION } from './gearExpansion';
 import { SPECIALIST_HOOKS } from './hookCatalog';
 import { FISH_LOOKS, type FishLook } from './fishArt';
+import { applyFictionalProductName, type BrandProduct } from './fictionalBrands';
 export type { FishLook } from './fishArt';
 // 어종과 채비 데이터. 수심·출현율·장비 수치는 게임 밸런스다.
 
@@ -147,7 +148,6 @@ export const BAIT_PACKS = [
   { id: 'worm', name: '지렁이 10마리', count: 10, price: 30 },
   { id: 'paste', name: '곡물떡밥 10회분', count: 10, price: 40 },
   { id: 'corn', name: '옥수수 10알', count: 10, price: 35 },
-  { id: 'chum', name: '기본 집어 떡밥 5회분', count: 5, price: 60 },
   { id: 'gluten', name: '기본 글루텐떡밥 10회분', count: 10, price: 45 },
   { id: 'pellet', name: '기본 어분떡밥 10회분', count: 10, price: 50 },
   { id: 'shrimp', name: '민물새우 10마리', count: 10, price: 65 },
@@ -207,20 +207,31 @@ HOOKS.push(...SPECIALIST_HOOKS);
 FLOATS.push(...EXPANDED_FLOATS);
 
 export const INGREDIENTS = [
-  { id: 'bran', name: '미강', desc: '곡물떡밥과 집어제의 기본 재료', price: 25, count: 10 },
+  { id: 'bran', name: '미강', desc: '바늘에 다는 곡물떡밥의 기본 재료', price: 25, count: 10 },
   { id: 'cornmeal', name: '옥수수 가루', desc: '곡물 향과 먹이 입자를 더한다', price: 35, count: 10 },
-  { id: 'attractor', name: '새우분', desc: '집어 떡밥에 새우 향을 더한다', price: 45, count: 5 },
-  { id: 'fishmeal', name: '경원 아쿠아텍2', desc: '어분 떡밥. 잉어·향어용 바늘 떡밥 재료', price: 40, count: 10 },
+  { id: 'attractor', name: '새우분', desc: '바늘 떡밥에 새우 향을 더한다', price: 45, count: 5 },
+  { id: 'fishmeal', name: '경원 아쿠아텍2 배합 재료', desc: '어분 떡밥. 잉어·향어용 바늘 떡밥 재료', price: 40, count: 10 },
   { id: 'glutenpowder', name: '마루큐 와타글루 배합 재료', desc: '글루텐이 많아 바늘에 오래 붙는다. 떡밥의 결합력을 높인다', price: 35, count: 10 },
+  { id: 'barley', name: '보리 가루', desc: '보리 입자를 더하는 떡밥 재료', price: 30, count: 10 },
+  { id: 'strawberry', name: '딸기향 분말', desc: '딸기향을 더하는 떡밥 재료', price: 40, count: 10 },
 ] as const;
+
+// 상품 ID와 수치·저장 형식은 유지하고, 게임 화면과 가방에서 쓸 가상 제조사 이름만 붙인다.
+Object.assign(BAITS.worm, { name: '소담 흙지렁이' });
+Object.assign(BAITS.paste, { name: '들향 곡물떡밥' });
+Object.assign(BAITS.corn, { name: '들향 삶은 옥수수' });
+Object.assign(BAITS.gluten, { name: '결착 글루텐떡밥' });
+Object.assign(BAITS.pellet, { name: '어심 어분떡밥' });
+Object.assign(BAITS.shrimp, { name: '소담 민물새우' });
+for (const pack of BAIT_PACKS) applyFictionalProductName('bait', pack as unknown as BrandProduct);
+for (const rod of RODS) applyFictionalProductName('rod', rod);
+ROD.name = RODS[0].name;
+for (const line of LINES) applyFictionalProductName('line', line);
+for (const float of FLOATS) applyFictionalProductName('float', float);
+for (const hook of HOOKS) applyFictionalProductName('hook', hook);
+for (const ingredient of INGREDIENTS) applyFictionalProductName('ingredient', ingredient as unknown as BrandProduct);
+
 export type IngredientId = typeof INGREDIENTS[number]['id'];
-export const FEED_RECIPES: { id: string; name: string; materials: Partial<Record<IngredientId, number>>; yield: number; bait: BaitId | 'chum' }[] = [
-  { id: 'grain', name: '곡물 집어 떡밥', materials: { bran: 2, cornmeal: 1 }, yield: 3, bait: 'chum' },
-  { id: 'aroma', name: '새우분 집어 떡밥', materials: { bran: 2, cornmeal: 2, attractor: 1 }, yield: 5, bait: 'chum' },
-  { id: 'hook-grain', name: '곡물떡밥', materials: { bran: 2, cornmeal: 1 }, yield: 4, bait: 'paste' },
-  { id: 'hook-gluten', name: '글루텐떡밥', materials: { glutenpowder: 2, cornmeal: 1 }, yield: 5, bait: 'gluten' },
-  { id: 'hook-fishmeal', name: '어분떡밥', materials: { fishmeal: 2, bran: 1 }, yield: 5, bait: 'pellet' },
-];
 
 
 export interface Species {

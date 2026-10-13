@@ -1,21 +1,25 @@
-import { BAIT_IDS, BAIT_PACKS, FEED_RECIPES, FLOATS, HOOKS, INGREDIENTS, LINES, MAX_DEPLOYED_RODS, RODS, SPECIES, type BaitId, type IngredientId, type SpeciesId } from './data';
+import { BAIT_IDS, BAIT_PACKS, FLOATS, HOOKS, INGREDIENTS, LINES, MAX_DEPLOYED_RODS, RODS, SPECIES, type BaitId, type IngredientId, type SpeciesId } from './data';
 import { ACHIEVEMENTS, dailyQuests, fishValue, today, type QuestKind, type QuestState } from './economy';
 import { KEEPNETS, NETS, SPECIES_RULES } from './items';
 import { SKILL_IDS, SKILL_MAX, type SkillId } from './skills';
 import type { Catch } from './fishing';
-import { BAIT_PRODUCTS, baitProduct } from './realCatalog';
+import { BAIT_PRODUCTS, LEGACY_CHUM_PRODUCTS, baitProduct } from './realCatalog';
 import { ACTIVE_FISHERY, FISHERIES, type FisheryId } from './fisheries';
 import { personalGoals } from './personalGoals';
+import { createFeedBlend, FEED_MATERIALS, type FeedBlend, type FeedDraft } from './feedMixing';
 
-export interface Rig { rodId: string; floatId: string; hookId: string; bait: BaitId; baitProductId?: string; chumProductId?: string; lineIdx: number; depthSet: number }
+export interface Rig { rodId: string; floatId: string; hookId: string; bait: BaitId; baitProductId?: string; lineIdx: number; depthSet: number }
 export interface CatchRecord { id: string; species: SpeciesId; cm: number; kg: number; at: number; platform: number; fisheryId?: FisheryId; kept: boolean; sold: boolean; value: number; released?: boolean; rig?: Rig; releaseBonusPaid?: boolean }
 export interface PlacedRig { slotId: string; ownerId: string; rig: Rig; fisheryId?: FisheryId }
 export interface TournamentResult { id: string; name: string; at: number; rank: number; of: number; prize: number; score: string }
 export interface PlayerSave {
   version: 1; playerId: string; coins: number; xp: number;
+  baitMode: 'hook-only';
+  /** chum은 구버전 재고 이전용이며 현재 저장에서는 항상 0이다. */
   baits: Record<BaitId | 'chum', number>; rods: Record<string, number>;
   /** 브랜드 재고는 baits 총량에 포함된다. 예전 저장은 전부 일반 미끼다. */
   baitProducts: Record<string, number>;
+  baitBlends: FeedBlend[];
   ingredients: Record<IngredientId, number>;
   floats: string[]; hooks: string[]; rig: Rig; catches: CatchRecord[]; placed: PlacedRig[];
   // 러시안피싱4식 확장 (예전 저장에는 없을 수 있다)
@@ -39,10 +43,11 @@ export class LocalProfileRepository implements ProfileRepository {
   load(): unknown { try { return JSON.parse(localStorage.getItem('fishing-player-v1') ?? 'null'); } catch { return null; } }
   save(profile: PlayerSave) { localStorage.setItem('fishing-player-v1', JSON.stringify(profile)); }
 }
-const initial = (): PlayerSave => ({ version: 1, playerId: 'local-player', coins: 500, xp: 0,
+const initial = (): PlayerSave => ({ version: 1, baitMode: 'hook-only', playerId: 'local-player', coins: 500, xp: 0,
   baitProducts: { 'kw-burger': 10, 'kw-aqua2': 5, 'mq-wata': 5 },
-  baits: { worm: 20, paste: 20, corn: 10, chum: 5, gluten: 10, pellet: 10, shrimp: 10 }, rods: { starter: 3 }, floats: ['basic'], hooks: ['small'],
-  ingredients: { bran: 10, cornmeal: 10, attractor: 3, fishmeal: 8, glutenpowder: 8 },
+  baitBlends: [],
+  baits: { worm: 20, paste: 25, corn: 10, chum: 0, gluten: 10, pellet: 10, shrimp: 10 }, rods: { starter: 3 }, floats: ['basic'], hooks: ['small'],
+  ingredients: { bran: 10, cornmeal: 10, attractor: 3, fishmeal: 8, glutenpowder: 8, barley: 0, strawberry: 0 },
   rig: { rodId: 'starter', floatId: 'basic', hookId: 'small', bait: 'worm', lineIdx: 1, depthSet: 2.4 }, catches: [], placed: [],
   lines: ['1.5', '2'], nets: ['basic'], net: 'basic', keepnets: ['basic'], keepnetId: 'basic',
   wear: {},
@@ -68,9 +73,34 @@ export class PlayerProgress {
       d.coins = Math.floor(number(s.coins, 500)); d.xp = Math.floor(number(s.xp, 0));
       for (const id of [...BAIT_IDS, 'chum' as const]) d.baits[id] = Math.floor(number(s.baits?.[id], d.baits[id]));
       d.baitProducts = {};
+      if (Array.isArray(s.baitBlends)) {
+        const seen = new Set<string>();
+        d.baitBlends = s.baitBlends.flatMap(raw => {
+          if (!raw || typeof raw.id !== 'string' || !/^blend-[a-zA-Z0-9-]{1,80}$/.test(raw.id) || seen.has(raw.id)) return [];
+          const blend = createFeedBlend(raw.id, raw);
+          if (!blend) return [];
+          seen.add(blend.id); return [blend];
+        });
+      }
+      if (s.baitMode !== 'hook-only') {
+        // 예전 총 집어 재고에는 제품·직접 배합·기본 떡밥이 모두 포함된다.
+        const oldBlends = new Set((Array.isArray(s.baitBlends) ? s.baitBlends : []).filter(b => {
+          const old = b as unknown as { use?: string; baseBait?: string };
+          return old && (old.use === 'chum' || old.baseBait === 'chum');
+        }).map(b => b.id));
+        let remainingChum = d.baits.chum;
+        for (const product of this.baitCatalog) {
+          if (!LEGACY_CHUM_PRODUCTS.has(product.id) && !oldBlends.has(product.id)) continue;
+          const count = Math.min(remainingChum, Math.floor(number(s.baitProducts?.[product.id], 0)));
+          d.baits[product.baseBait] += count;
+          remainingChum -= count;
+        }
+        d.baits.paste += remainingChum;
+      }
+      d.baits.chum = 0;
       // 제품별 재고 합이 총량을 넘지 않게 오래된/손상된 저장도 받아들인다.
       const remaining = { ...d.baits };
-      for (const product of BAIT_PRODUCTS) {
+      for (const product of this.baitCatalog) {
         const count = Math.min(remaining[product.baseBait], Math.floor(number(s.baitProducts?.[product.id], 0)));
         d.baitProducts[product.id] = count;
         remaining[product.baseBait] -= count;
@@ -88,6 +118,9 @@ export class PlayerProgress {
       if (s.wear && typeof s.wear === 'object') for (const [k, v] of Object.entries(s.wear)) d.wear[k] = Math.min(1, number(v, 0));
       for (const id of SKILL_IDS) d.skills[id] = Math.min(SKILL_MAX, Math.floor(number(s.skills?.[id], 0)));
       if (s.quests && typeof s.quests.day === 'string' && Array.isArray(s.quests.list)) d.quests = s.quests;
+      if (s.baitMode !== 'hook-only') for (const quest of d.quests.list) {
+        if (typeof quest.id === 'string' && quest.id.endsWith(':8') && !quest.claimed) quest.progress = 0;
+      }
       if (Array.isArray(s.achievements)) d.achievements = s.achievements.filter(a => typeof a === 'string');
       if (Array.isArray(s.personalGoalClaims)) d.personalGoalClaims = [...new Set(s.personalGoalClaims.filter(a => typeof a === 'string'))];
       if (s.shopGoal && SHOP_KINDS.includes(s.shopGoal.kind) && PlayerProgress.catalog(s.shopGoal.kind).some(i => i.id === s.shopGoal!.id)) d.shopGoal = { kind: s.shopGoal.kind, id: s.shopGoal.id };
@@ -124,13 +157,11 @@ export class PlayerProgress {
   normalizeRig(rig: Partial<Rig> = {}): Rig {
     const rod = RODS.find(r => r.id === rig.rodId && this.data.rods[r.id] > 0) ?? RODS[0];
     const lineIdx = Math.min(LINES.length - 1, Math.floor(number(rig.lineIdx, 1)));
-    const product = baitProduct(rig.baitProductId);
-    const chum = baitProduct(rig.chumProductId);
+    const product = this.baitProduct(rig.baitProductId);
     return { rodId: rod.id, floatId: this.data.floats.includes(rig.floatId ?? '') ? rig.floatId! : 'basic',
       hookId: this.data.hooks.includes(rig.hookId ?? '') ? rig.hookId! : 'small',
       bait: rig.bait && BAIT_IDS.includes(rig.bait) ? rig.bait : 'worm',
       baitProductId: product && product.baseBait === rig.bait ? product.id : undefined,
-      chumProductId: chum?.baseBait === 'chum' ? chum.id : undefined,
       lineIdx: this.data.lines.includes(LINES[lineIdx].id) ? lineIdx : 1, depthSet: Math.max(0.3, Math.min(rod.line, number(rig.depthSet, 2.4))) };
   }
   get ownerId() { return this.data.playerId; }
@@ -145,18 +176,19 @@ export class PlayerProgress {
   get keepnetSpec() { return KEEPNETS.find(k => k.id === this.data.keepnetId) ?? KEEPNETS[0]; }
   get keepnetKg() { return this.keepnet.reduce((n, c) => n + c.kg, 0); }
   save() { this.goalCache = null; try { this.repository.save(this.data); this.saveFailed = false; } catch { this.saveFailed = true; } }
-  genericBaitCount(id: BaitId | 'chum') {
-    return Math.max(0, this.data.baits[id] - BAIT_PRODUCTS.filter(p => p.baseBait === id).reduce((n, p) => n + (this.data.baitProducts[p.id] ?? 0), 0));
+  get baitCatalog() { return [...BAIT_PRODUCTS, ...this.data.baitBlends]; }
+  baitProduct = (id?: string) => this.data.baitBlends.find(b => b.id === id) ?? baitProduct(id);
+  genericBaitCount(id: BaitId) {
+    return Math.max(0, this.data.baits[id] - this.baitCatalog.filter(p => p.baseBait === id).reduce((n, p) => n + (this.data.baitProducts[p.id] ?? 0), 0));
   }
-  consumeBait = (id: BaitId | 'chum', productId?: string): boolean => {
+  consumeBait = (id: BaitId, productId?: string): boolean => {
     if (this.data.baits[id] <= 0) return false;
     if (productId) {
-      const product = baitProduct(productId);
+      const product = this.baitProduct(productId);
       if (!product || product.baseBait !== id || !(this.data.baitProducts[productId] > 0)) return false;
       this.data.baitProducts[productId]--;
     } else if (this.genericBaitCount(id) <= 0) return false;
     this.data.baits[id]--;
-    if (id === 'chum') this.progressQuest('chum', 1);
     this.save(); return true;
   };
 
@@ -198,7 +230,7 @@ export class PlayerProgress {
     if (kind === 'keepnet') { d.keepnets.push(id); d.keepnetId = id; }
     if (kind === 'bait' && 'count' in item) {
       const product = baitProduct(id);
-      const baseBait = product?.baseBait ?? (id as BaitId | 'chum');
+      const baseBait = product?.baseBait ?? (id as BaitId);
       d.baits[baseBait] += item.count as number;
       if (product) d.baitProducts[id] = (d.baitProducts[id] ?? 0) + (item.count as number);
     }
@@ -306,14 +338,30 @@ export class PlayerProgress {
     if (!this.canGatherWorms) return '지렁이가 없고 구매할 돈이 부족할 때 채집할 수 있어요';
     this.data.baits.worm += 5; this.save(); return '지렁이 5개를 채집했어요';
   }
-  craftFeed(id: string) {
-    const recipe = FEED_RECIPES.find(r => r.id === id);
-    if (!recipe) return '배합을 찾을 수 없어요';
-    const materials = Object.entries(recipe.materials) as [IngredientId, number][];
-    if (materials.some(([ingredient, count]) => this.data.ingredients[ingredient] < count)) return '떡밥 재료가 부족해요';
-    for (const [ingredient, count] of materials) this.data.ingredients[ingredient] -= count;
-    this.data.baits[recipe.bait] += recipe.yield;
-    this.save(); return `${recipe.name} ${recipe.yield}개를 만들었어요`;
+  feedMaterialCount(key: string) {
+    if (!FEED_MATERIALS.some(m => m.key === key)) return 0;
+    const [kind, id] = key.split(':');
+    return kind === 'ingredient' ? this.data.ingredients[id as IngredientId] ?? 0
+      : kind === 'product' ? this.data.baitProducts[id] ?? 0 : this.genericBaitCount(id as BaitId);
+  }
+  craftFeed(draft: FeedDraft): { ok: boolean; message: string } {
+    const blend = createFeedBlend(`blend-${crypto.randomUUID()}`, draft);
+    if (!blend) return { ok: false, message: '재료와 배합량을 확인해 주세요' };
+    if (blend.parts.some(p => this.feedMaterialCount(p.key) < p.count)) return { ok: false, message: '떡밥 재료가 부족해요' };
+    for (const part of blend.parts) {
+      const [kind, id] = part.key.split(':');
+      if (kind === 'ingredient') this.data.ingredients[id as IngredientId] -= part.count;
+      else {
+        const base = kind === 'product' ? baitProduct(id)!.baseBait : id as BaitId;
+        this.data.baits[base] -= part.count;
+        if (kind === 'product') this.data.baitProducts[id] -= part.count;
+      }
+    }
+    this.data.baitBlends.push(blend);
+    this.data.baitProducts[blend.id] = blend.count;
+    this.data.baits[blend.baseBait] += blend.count;
+    this.save();
+    return { ok: true, message: `${blend.name} ${blend.count}회분을 만들었어요` };
   }
 
   // ── 기술 ──

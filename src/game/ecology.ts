@@ -18,6 +18,7 @@ const PRODUCT_TARGETS: Record<string, Partial<Record<SpeciesId, number>>> = {
   'mq-ookoi': { carp: 1.42, mirror: 1.2, crucian: 0.75 },
 };
 export function baitAffinity(sp: Species, bait: BaitId, product?: BaitProduct) {
+  if (product?.blendPreferences) return product.blendPreferences[sp.id] ?? 0;
   const preference = sp.baits[bait];
   // 거의 먹지 않는 곡물 미끼로 포식자를 만능 공략하지 못한다.
   const productPreference = product ? productAffinity(product.speciesAffinity ?? PRODUCT_TARGETS[product.id], sp.id) : 1;

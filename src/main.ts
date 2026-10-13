@@ -9,7 +9,6 @@ import './style.css';
 if (import.meta.env.DEV && location.hostname === '127.0.0.1') location.replace(location.href.replace('//127.0.0.1', '//localhost'));
 import { Sound } from './audio';
 import { BAITS, FLOATS, HOOKS, LINES, MAX_DEPLOYED_RODS, RODS, rodAction, type BaitId } from './game/data';
-import { baitProduct } from './game/realCatalog';
 import { ACTIVE_FISHERY, canEnterFishery, findFishery } from './game/fisheries';
 import { SPECIES, type SpeciesId } from './game/data';
 import type { OnlineService } from './game/online';
@@ -20,6 +19,7 @@ import { mods } from './game/modifiers';
 import { Tournament, TOURNAMENTS, TOURNAMENTS_OPEN } from './game/tournament';
 import { Fishing } from './game/fishing';
 import { MountedRod } from './game/mountedRods';
+import { RemotePlayers } from './game/remotePlayers';
 import { PlayerProgress } from './game/profile';
 import { FishingGrounds } from './game/grounds';
 import { VoxelFishModel as FishModel } from './render/voxelFishModel';
@@ -36,7 +36,7 @@ import { createForest, createGrass, createReeds } from './world/vegetation';
 import { createVoxelWorld } from './world/voxel';
 import { createFisheryScenery } from './world/fisheryScenery';
 import { Water } from './world/water';
-import { DECK_Y, FISHING_POSITION_OFFSET, Platforms, type RodSlot } from './world/platforms';
+import { DECK_Y, Platforms, type RodSlot } from './world/platforms';
 
 // 진입점: 장면을 세우고, 입력 → 게임 규칙 → 화면·소리를 매 프레임 잇는다.
 
@@ -88,6 +88,8 @@ if (style === 'voxel') scene.add(createVoxelWorld());
 else scene.add(createTerrain(), createForest(), createReeds(), createGrass());
 const platforms = new Platforms();
 scene.add(platforms.group);
+const remotePlayers = new RemotePlayers(platforms, (x, z) => platforms.surfaceAt(x, z) ?? heightAt(x, z));
+scene.add(remotePlayers.group);
 const fisheryScenery = createFisheryScenery();
 scene.add(fisheryScenery);
 const fisheryStars = fisheryScenery.getObjectByName('fishery-stars');
@@ -187,7 +189,7 @@ let onlinePromise: Promise<OnlineService> | null = null;
 function connectOnline() {
   return onlinePromise ??= import('./game/online').then(({ OnlineService }) => {
     onlineService = new OnlineService();
-    onlineService.subscribe(state => hud.setOnline(state));
+    onlineService.subscribe(state => { hud.setOnline(state); remotePlayers.setPlayers(state.players); });
     return onlineService;
   }).catch(error => {
     onlinePromise = null;
@@ -277,9 +279,8 @@ const hud = new Hud(document.getElementById('hud')!, game, player, env, settings
   release(id) { hud.toast(player.releaseFromKeepnet(id)); },
   gather() { hud.toast(player.gatherWorms()); },
   menu(m) { toggleModal(m); },
-  craft(id) { hud.toast(player.craftFeed(id), 'good'); },
+  craft(draft) { const result = player.craftFeed(draft); hud.toast(result.message, result.ok ? 'good' : 'bad'); return result.ok; },
   take(number) { takeRod(number); },
-  feed() { feed(); },
   equip(kind, id) { hud.toast(player.equip(kind, id)); },
   repair(key) { hud.toast(player.repair(key)); },
   deploy(rodId) { deployRod(rodId); },
@@ -358,10 +359,6 @@ function touchLayout(interact: string, nearRod: boolean): TouchLayout {
   return { main: interact ? 'interact' : null, alt: null, chips: nearRod ? ['stow', 'zoom'] : ['zoom'], zoomOn: zoom, label: interact };
 }
 
-function feed() {
-  if (!exploring()) return;
-  if (!active || !game.feed()) hud.toast('찌가 물에 있을 때 집어 떡밥을 뿌릴 수 있어요. 떡밥 재고도 확인하세요');
-}
 function joinTournament(id: string) {
   const def = TOURNAMENTS.find(t => t.id === id);
   if (!def) return;
@@ -414,7 +411,7 @@ addEventListener('mouseup', (e) => {
 addEventListener('contextmenu', (e) => e.preventDefault());
 addEventListener('keydown', (e) => {
   if (e.target instanceof HTMLElement && (e.target.matches('input, textarea') || e.target.isContentEditable)) return;
-  if (['Tab', 'Space', 'KeyM'].includes(e.code)) e.preventDefault();
+  if (['Tab', 'Space'].includes(e.code)) e.preventDefault();
   if (!hud.started) return;
   if (e.code === 'Enter' && !e.repeat && !e.isComposing) { e.preventDefault(); hud.focusChat(); return; }
   if (game.phase === 'landed') {
@@ -428,12 +425,10 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyD') walk.d = true;
   if (e.code === 'KeyC') toggleModal('setup');
   if (e.code === 'Tab') toggleModal('keepnet');
-  if (e.code === 'KeyM' && !e.repeat) toggleModal('platforms');
   if (e.code === 'KeyB' && !e.repeat) toggleModal('shop');
   if (e.code === 'KeyN' && !e.repeat) toggleModal('market');
   if (e.code === 'KeyJ' && !e.repeat) toggleModal('records');
   if (e.code === 'KeyL' && !e.repeat) toggleModal('onlineRanking');
-  if ((e.code === 'KeyG' || e.code === 'Digit4') && !e.repeat) feed();
   if (e.code === 'KeyQ' && !e.repeat) toggleModal('quests');
   if (e.code === 'KeyK' && !e.repeat) toggleModal('skills');
   if (e.code === 'KeyT' && !e.repeat && TOURNAMENTS_OPEN) toggleModal('tournament');
@@ -462,7 +457,7 @@ function toggleModal(m: MenuModal) {
     return;
   }
   if ((m === 'shop' || m === 'market') && platforms.nearStall(PLAYER.x, PLAYER.z)?.id !== m) {
-    hud.toast(`${m === 'shop' ? '낚시점' : '어시장'}은 관리동에 있어요 · M 지도에서 관리동으로 이동하세요`);
+    hud.toast(`${m === 'shop' ? '낚시점' : '어시장'} 계산대 앞에서 열 수 있어요`);
     return;
   }
   input.primary = input.lift = false;
@@ -500,19 +495,17 @@ function changeRig(kind: string, id: string, g: Fishing = game) {
     const rod = RODS.find(r => r.id === id);
     if (!rod) return;
     const used = Array.from(mounted.values()).filter(m => m.game !== g && m.game.rodId === id).length;
-    if ((player.data.rods[id] ?? 0) <= used) { hud.toast('사용 가능한 낚싯대가 없어요. 상점에서 구매하세요'); return; }
+    if ((player.data.rods[id] ?? 0) <= used) { hud.toast('남은 낚싯대가 없어요 · 낚시점에서 살 수 있어요'); return; }
     g.rodId = id; g.depthSet = Math.min(g.depthSet, rod.line);
   }
   if (kind === 'float' && FLOATS.some(f => f.id === id) && player.data.floats.includes(id)) g.floatId = id;
   if (kind === 'hook' && HOOKS.some(h => h.id === id) && player.data.hooks.includes(id)) g.hookId = id;
   if (kind === 'bait' && Object.hasOwn(BAITS, id)) { g.bait = id as BaitId; g.baitProductId = undefined; }
   if (kind === 'baitProduct') {
-    const product = baitProduct(id);
+    const product = player.baitProduct(id);
     if (!product || !(player.data.baitProducts[id] > 0)) return;
-    if (product.baseBait === 'chum') g.chumProductId = id;
-    else { g.bait = product.baseBait; g.baitProductId = id; }
+    g.bait = product.baseBait; g.baitProductId = id;
   }
-  if (kind === 'chum') g.chumProductId = undefined;
   if (kind === 'line') {
     const idx = Math.max(0, Math.min(LINES.length - 1, Number(id)));
     if (player.data.lines.includes(LINES[idx].id)) g.lineIdx = idx;
@@ -562,12 +555,12 @@ function prepareSlot(slot: RodSlot, rodId?: string) {
   if (busy()) { hud.toast('지금 낚시를 마친 뒤 선택할 수 있어요'); return; }
   let next = mounted.get(slot.id);
   if (!next) {
-    if (mounted.size >= MAX_DEPLOYED_RODS) { hud.toast('플레이어당 낚싯대는 총 3대까지 펼칠 수 있어요. F 또는 가방에서 한 대를 회수하세요'); return; }
+    if (mounted.size >= MAX_DEPLOYED_RODS) { hud.toast('낚싯대는 3대까지 펼칠 수 있어요 · 한 대를 회수한 뒤 꺼내세요'); return; }
     let rig = rodId ? { ...player.data.rig, rodId } : player.data.rig;
     const available = (id: string) => (player.data.rods[id] ?? 0) > Array.from(mounted.values()).filter(m => m.game.rodId === id).length;
     if (!available(rig.rodId)) {
       const replacement = RODS.find(r => available(r.id));
-      if (!replacement) { hud.toast('보유 낚싯대를 모두 설치했어요. 회수하거나 상점에서 구매하세요'); return; }
+      if (!replacement) { hud.toast('가진 낚싯대를 모두 폈어요 · 한 대를 회수하거나 낚시점에서 더 사세요'); return; }
       rig = { ...rig, rodId: replacement.id };
     }
     next = new MountedRod(slot, player, grounds, rig);
@@ -583,21 +576,23 @@ function prepareSlot(slot: RodSlot, rodId?: string) {
 
 function parkRod() {
   if (!active || busy()) return;
-  if (!platforms.canReachSlot(PLAYER.x, PLAYER.z, active.slot)) { hud.toast('자신의 좌대에서 거치하세요'); return; }
+  if (!platforms.canReachSlot(PLAYER.x, PLAYER.z, active.slot)) { hud.toast('대를 꺼낸 받침틀 앞에서 거치하세요'); return; }
   parking = true;
   input.primary = input.lift = input.hookset = input.retrieve = false;
 }
 
 function takeRod(number: number) {
   if (!Number.isInteger(number) || number < 1 || number > MAX_DEPLOYED_RODS) return;
-  const here = platforms.current(PLAYER.x, PLAYER.z);
-  const slot = here?.slots[number - 1];
-  const next = slot ? mounted.get(slot.id) : Array.from(mounted.values())[number - 1];
+  // 이 좌대에 이미 편 n번 대가 있으면 그 대를, 없으면 지금 선 받침틀의 n번 자리. 좌대 밖이면 편 순서대로
+  const seat = platforms.nearestSeat(PLAYER.x, PLAYER.z);
+  const placedHere = seat ? Array.from(mounted.values()).find(m => m.slot.platform === seat.platform && m.slot.number === number) : undefined;
+  const slot = placedHere ? undefined : seat?.slots[number - 1];
+  const next = placedHere ?? (slot ? mounted.get(slot.id) : Array.from(mounted.values())[number - 1]);
   if (next && next === active) return;
-  if (active || busy()) { hud.toast('E로 들고 있는 낚싯대를 먼저 거치하세요'); return; }
+  if (active || busy()) { hud.toast('들고 있는 낚싯대를 먼저 거치하세요'); return; }
   if (slot) prepareSlot(slot);
   else if (next) {
-    if (!platforms.canReachSlot(PLAYER.x, PLAYER.z, next.slot)) { hud.toast(`${next.slot.platform}번 좌대로 이동하세요`); return; }
+    if (!platforms.canReachSlot(PLAYER.x, PLAYER.z, next.slot)) { hud.toast(`${next.slot.platform}번 좌대 ${['왼쪽', '가운데', '오른쪽'][next.slot.seat - 1]} 받침틀로 가세요`); return; }
     selectRod(next);
   } else { hud.toast('좌대로 이동한 뒤 낚싯대를 꺼내세요'); return; }
   if (hud.modal !== 'none') hud.close();
@@ -605,11 +600,11 @@ function takeRod(number: number) {
 
 /** 가방에서 그 낚싯대를 꺼내 지금 좌대의 빈 받침대 자리에 든다 */
 function deployRod(rodId: string) {
-  const here = platforms.current(PLAYER.x, PLAYER.z);
-  if (!here) { hud.toast('좌대로 이동한 뒤 꺼내세요'); return; }
-  if (active) { hud.toast('E로 들고 있는 낚싯대를 먼저 거치하세요'); return; }
-  const free = here.slots.find(s => !mounted.has(s.id));
-  if (!free) { hud.toast('이 좌대의 받침대 세 자리가 모두 찼어요'); return; }
+  const seat = platforms.nearestSeat(PLAYER.x, PLAYER.z);
+  if (!seat) { hud.toast('좌대로 이동한 뒤 꺼내세요'); return; }
+  if (active) { hud.toast('들고 있는 낚싯대를 먼저 거치하세요'); return; }
+  const free = seat.slots.find(s => !mounted.has(s.id));
+  if (!free) { hud.toast('이 받침틀의 세 자리가 모두 찼어요'); return; }
   hud.close();
   prepareSlot(free, rodId);
 }
@@ -630,13 +625,13 @@ function removeRod(target?: MountedRod) {
 }
 
 function travelTo(id: number) {
-  if (active) { hud.toast('E로 낚싯대를 거치한 뒤 이동하세요'); return; }
+  if (active) { hud.toast('낚싯대를 거치한 뒤 이동하세요'); return; }
   if (busy()) { hud.toast('지금 낚시를 마친 뒤 이동할 수 있어요'); return; }
   const p = platforms.platforms.find(p => p.id === id);
   if (!p && id !== 0) return;
   selectRod(null);
   // 0번은 관리동: 다리 쪽에서 들어와 왼쪽 낚시점, 오른쪽 어시장을 본다
-  if (p) { PLAYER.x = p.x; PLAYER.z = p.z - FISHING_POSITION_OFFSET; }
+  if (p) { PLAYER.x = p.seats[1].x; PLAYER.z = p.seats[1].z; }
   else { PLAYER.x = platforms.office.x; PLAYER.z = platforms.office.z + 2.2; }
   eye.set(PLAYER.x, DECK_Y + EYE_HEIGHT, PLAYER.z);
   yaw = 0; pitch = -0.08;
@@ -654,6 +649,13 @@ function connectGame(source: Fishing) { source.on((e) => {
   // 파이팅이 끝나면 닳은 장비 상태를 저장한다
   if (e.type === 'lost' && e.reason === 'rod') player.addWear(`rod:${source.rodId}`, 1);
   if (e.type === 'landed' || e.type === 'lost') player.save();
+  if (e.type === 'landed' && source.lastCatch) {
+    const caught = source.lastCatch;
+    void connectOnline().then(async service => {
+      if (!await service.announceCatch(caught)) hud.toast('낚시터 연결이 끊겨 조과 로그를 올리지 못했어요', 'bad');
+    })
+      .catch(() => hud.toast('조과 채팅 로그를 올리지 못했어요', 'bad'));
+  }
   if (source !== game) {
     if (e.type === 'ripple') water.ripple(e.x, e.z, e.size);
     if (e.type === 'splash') splashes.burst(e.x, e.z, e.size);
@@ -721,7 +723,9 @@ connectGame(idleGame);
 for (const saved of player.data.placed) {
   if ((saved.fisheryId ?? 'willow') !== ACTIVE_FISHERY.id) continue;
   if (mounted.size >= MAX_DEPLOYED_RODS) break;
-  const slot = platforms.slots.find(s => s.id === saved.slotId);
+  const legacy = /^(\d+)-(\d)$/.exec(saved.slotId);
+  const slotId = legacy ? `${legacy[1]}-2-${legacy[2]}` : saved.slotId;
+  const slot = platforms.slots.find(s => s.id === slotId);
   const count = Array.from(mounted.values()).filter(m => m.game.rodId === saved.rig.rodId).length;
   if (!slot || mounted.has(slot.id) || count >= (player.data.rods[saved.rig.rodId] ?? 0)) continue;
   const placed = new MountedRod(slot, player, grounds, saved.rig);
@@ -741,14 +745,14 @@ function finishCatch(keep: boolean) {
   if (game.phase !== 'landed' || landing) return;
   const c = game.lastCatch!;
   if (keep && player.tooSmall(c)) { hud.toast('금지 체장 미만이라 놓아줘야 해요', 'bad'); return; }
-  if (keep && player.keepnet.length >= player.keepnetSpec.capacity) { hud.toast('살림망이 가득 찼어요. 판매하거나 놓아주세요', 'bad'); return; }
+  if (keep && player.keepnet.length >= player.keepnetSpec.capacity) { hud.toast('살림망이 가득 찼어요 · 어시장에서 팔거나 놓아주세요', 'bad'); return; }
   const level = player.level;
   const { xp, bounty } = player.recordCatch(c, keep, active?.slot.platform ?? 0, game.rig);
   void onlineService?.submitCatch(c).catch(() => hud.toast('온라인 랭킹 저장을 못 했어요. 개인 기록은 저장됐습니다', 'bad'));
   game.finishCatch(keep);
   if (tournament?.submit(c.species.id, c.cm, c.kg)) hud.toast(`대회 기록 반영 · 현재 ${tournament.rank}위`, 'good');
   hud.toast(`+${xp} 경험치 · ${keep ? '살림망에서 판매할 수 있어요' : bounty ? `교란종 수매 +${bounty}원` : '방생 기록 완료'}`, 'good');
-  if (player.level > level) hud.toast(`레벨 업! Lv.${player.level} · 기술 포인트 +1 (K)`, 'good');
+  if (player.level > level) hud.toast(`레벨 업! Lv.${player.level} · 기술 포인트 +1`, 'good');
   if (!locked()) lock();
 }
 
@@ -797,7 +801,8 @@ function updatePose(dt: number) {
     if (input.lift) rodElev -= dt * 0.9;
     // 고기가 대를 끌고 들어간다: 좌클릭으로 버티지 않으면 장력만큼 대가 숙여진다
     rodElev -= dt * 0.8 * Math.max(0, game.tension / game.rod.power - (input.primary ? 0.95 : 0.3));
-    rodElev = THREE.MathUtils.clamp(rodElev, restElev, 1.4);
+    // 원줄이 수면에 닿는 각도까지만 세워진다 (그 이상은 고기를 물 밖으로 들며 줄만 늘린다)
+    rodElev = THREE.MathUtils.clamp(rodElev, restElev, Math.max(restElev, Math.min(1.4, game.leadElevation(pose.butt.y))));
   } else if (landing) {
     rodElev += (1.15 - rodElev) * Math.min(1, dt * 3 / (1 + landing.kg));
   } else {
@@ -1072,7 +1077,7 @@ function updateWalk(dt: number, t: number) {
   if ((ix || iz) && exploring()) {
     if (busy() || active && game.phase !== 'ready') {
       if (t - walk.warnAt > 3) {
-        hud.toast('E로 대를 거치한 뒤 이동하세요', 'info');
+        hud.toast('낚싯대를 거치한 뒤 이동하세요', 'info');
         walk.warnAt = t;
       }
     } else {
@@ -1202,6 +1207,7 @@ function updateWorld(dt: number) {
   // 해 질 녘부터 어두울수록 서서히 밝아진다. 야광찌가 아니면 밤에 거의 안 보인다
   const dark = THREE.MathUtils.smoothstep(1 - env.daylight, 0.25, 0.75);
   sound.setAmbience(dark, env.weather === 'rain');
+  platforms.setLights(dark);
   const glowOn = (g: Fishing) => {
     const s = g.floatSpec, lit = s.glow ?? 0;
     // 변색 전자찌: 찌가 올라오면 색이 바뀐다
@@ -1234,7 +1240,7 @@ function frame(dt: number, render = true) {
     // 부러진 낚싯대는 수리하기 전까지 던질 수 없다
     const broken = game.phase === 'ready' && player.wearOf(`rod:${game.rodId}`) >= 1;
     if (broken && input.primary && playing() && performance.now() - brokenWarnAt > 3000) {
-      hud.toast('부러진 낚싯대예요 · 관리동 낚시점에서 수리할 수 있어요', 'bad');
+      hud.toast('부러진 낚싯대예요 · 낚시점에서 수리할 수 있어요', 'bad');
       brokenWarnAt = performance.now();
     }
     game.update({
@@ -1252,6 +1258,16 @@ function frame(dt: number, render = true) {
   if (!playing() || handBlend >= 0.85) input.hookset = input.retrieve = false;
   updateTackle(dt);
   updateCamera(dt, t);
+  remotePlayers.update(dt);
+  onlineService?.updatePlayerPose({
+    x: PLAYER.x, z: PLAYER.z, yaw,
+    rodSlots: Array.from(mounted.values()).filter(m => m !== active).map(m => ({ slotId: m.slot.id, rodId: m.game.rodId })),
+    heldRod: active ? {
+      rodId: active.game.rodId,
+      buttX: pose.butt.x, buttY: pose.butt.y, buttZ: pose.butt.z,
+      dirX: pose.dir.x, dirY: pose.dir.y, dirZ: pose.dir.z,
+    } : null,
+  });
   splashes.update(dt);
   mist.update(t);
   sky.update(t);

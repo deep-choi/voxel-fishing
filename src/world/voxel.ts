@@ -118,7 +118,12 @@ export function createVoxelWorld(): THREE.Group {
   // 블록 격자를 월드 8m 격자에 맞춘다
   const ox = Math.round(SEAT.x / 8) * 8;
   const oz = Math.round(SEAT.z / 8) * 8;
-  const topOf = (x: number, z: number, s: number) => snap(heightAt(x, z), Math.min(s, 1));
+  // 물 밑 블록 윗면은 수면(높이 0)보다 조금 낮춘다. 1m 단위로 맞추면 물가 바닥이 정확히 수면 높이(0)가 되어
+  // 수면과 같은 면에서 겹쳐 그려지며 깜빡이고 깨져 보인다
+  const topOf = (x: number, z: number, s: number) => {
+    const t = snap(heightAt(x, z), Math.min(s, 1));
+    return t <= 0 ? t - 0.12 : t;
+  };
   rings.forEach((r, ri) => {
     const inner = ri > 0 ? rings[ri - 1].half : -1;
     for (let gz = -r.half; gz < r.half; gz += r.size) {

@@ -1,5 +1,6 @@
 node_modules
 dist
+/sites/fishing-guide/
 .firebase/
 firebase-debug.log*
 .env
