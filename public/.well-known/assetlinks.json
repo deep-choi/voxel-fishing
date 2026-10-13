@@ -5,7 +5,8 @@
     ],
     "target": {
       "sha256_cert_fingerprints": [
-        "AF:46:6C:C4:6D:63:33:9A:25:E6:13:CA:37:FA:45:01:0D:78:BA:7E:77:04:8E:9D:C0:AB:A7:2C:6A:EB:24:8F"
+        "AF:46:6C:C4:6D:63:33:9A:25:E6:13:CA:37:FA:45:01:0D:78:BA:7E:77:04:8E:9D:C0:AB:A7:2C:6A:EB:24:8F",
+        "56:E8:C6:DF:D0:B0:A1:2D:D1:84:D8:97:53:B1:94:94:98:58:CD:C1:A4:E7:F1:09:81:7D:A8:7C:1C:04:C7:83"
       ],
       "namespace": "android_app",
       "package_name": "com.deepchoi.fishing"
