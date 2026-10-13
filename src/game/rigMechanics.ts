@@ -11,7 +11,7 @@ const BAIT_GAPS: Record<BaitId, number> = { worm: 4.5, paste: 5, corn: 6.8, glut
 const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
 export const lineDiameter = (line: LineSpec) => line.diameterMm ?? DIAMETERS[line.id] ?? 0.235;
 export const hookGap = (hook: HookSpec) => hook.gapMm ?? GAPS[hook.id] ?? 6.5;
-export const hookSizeLabel = (hook: HookSpec) => `${hook.name.match(/(\d+)호/)?.[1] ?? '?'}호 · 게임 폭 ${hookGap(hook).toFixed(1)}mm`;
+export const hookSizeLabel = (hook: HookSpec) => `${hook.size ?? hook.name.match(/(\d+)호/)?.[1] ?? '?'}호 · 게임 폭 ${hookGap(hook).toFixed(1)}mm`;
 /** 원줄 호수: 이름에 있으면 그대로, 없으면 굵기로 가장 가까운 표준 호수 */
 const LINE_GO: [number, string][] = [[0.165, '1'], [0.205, '1.5'], [0.235, '2'], [0.26, '2.5'], [0.285, '3'], [0.33, '4']];
 export const lineGo = (line: LineSpec) => line.name.match(/([\d.]+)호/)?.[1]

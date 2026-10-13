@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "sha256_cert_fingerprints": [
+        "AF:46:6C:C4:6D:63:33:9A:25:E6:13:CA:37:FA:45:01:0D:78:BA:7E:77:04:8E:9D:C0:AB:A7:2C:6A:EB:24:8F"
+      ],
+      "namespace": "android_app",
+      "package_name": "com.deepchoi.fishing"
+    }
+  }
+]

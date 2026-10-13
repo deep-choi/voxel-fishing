@@ -29,11 +29,12 @@ export function lineValue(line: LineSpec): TackleValue {
 }
 
 export function hookValue(hook: HookSpec): TackleValue {
-  const traits = getHookTraits(hook), family = series(hook.id);
-  const cheaper = HOOKS.filter(x => x.id !== hook.id && x.price < hook.price);
-  const previous = cheaper.filter(x => family && series(x.id) === family).sort((a, b) => b.price - a.price)[0]
-    ?? cheaper.filter(x => Math.abs(hookGap(x) - hookGap(hook)) < 0.01 && getHookTraits(x).shape === traits.shape
-      && getHookTraits(x).barbed === traits.barbed).sort((a, b) => b.price - a.price)[0];
+  const traits = getHookTraits(hook), family = series(hook.modelId ?? hook.id);
+  const cheaper = HOOKS.filter(x => x.id !== hook.id && x.price < hook.price
+    && Math.abs(hookGap(x) - hookGap(hook)) < 0.01 && getHookTraits(x).shape === traits.shape
+    && getHookTraits(x).barbed === traits.barbed);
+  const previous = cheaper.filter(x => family && series(x.modelId ?? x.id) === family).sort((a, b) => b.price - a.price)[0]
+    ?? cheaper.sort((a, b) => b.price - a.price)[0];
   return {
     reference: previous?.name,
     changes: previous ? [

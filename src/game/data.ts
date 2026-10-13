@@ -3,6 +3,7 @@ import { createExpandedSpecies } from './speciesExpansion';
 import { SIZE_RANKS } from './sizeRanks';
 import { EXPANDED_FLOATS, EXPANDED_HOOKS, EXPANDED_LINES, EXPANDED_RODS, EXPANDED_ROD_ACTION } from './gearExpansion';
 import { SPECIALIST_HOOKS } from './hookCatalog';
+import { configureHookModels } from './hookModels';
 import { FISH_LOOKS, type FishLook } from './fishArt';
 import { applyFictionalProductName, type BrandProduct } from './fictionalBrands';
 export type { FishLook } from './fishArt';
@@ -136,6 +137,8 @@ export function floatTraits(f: FloatSpec) {
 export interface HookSpec extends GearMeta {
   id: string; name: string; hold: number; attraction: number; price: number; desc: string; gapMm?: number;
   shape?: 'fine' | 'round' | 'long' | 'wide'; wireMm?: number; barbed?: boolean; sharpness?: number;
+  /** 고정된 제품과 호수 옵션. 품질·가격은 제품 단위로 정한다. */
+  modelId?: string; modelName?: string; brandId?: string; size?: number;
 }
 export const HOOKS: HookSpec[] = [
   { id: 'small', name: '오너 OH 갈색 헤라 개량스레 5호', hold: 0.9, attraction: 1.1, price: 0, level: 1, rarity: 'uncommon', desc: '붕어와 작은 물고기에게 유리' },
@@ -216,7 +219,7 @@ export const INGREDIENTS = [
   { id: 'strawberry', name: '딸기향 분말', desc: '딸기향을 더하는 떡밥 재료', price: 40, count: 10 },
 ] as const;
 
-// 상품 ID와 수치·저장 형식은 유지하고, 게임 화면과 가방에서 쓸 가상 제조사 이름만 붙인다.
+// 게임 화면과 가방에서 쓸 가상 제조사 이름을 붙인다. 바늘은 제품 모델과 호수도 명시한다.
 Object.assign(BAITS.worm, { name: '소담 흙지렁이' });
 Object.assign(BAITS.paste, { name: '들향 곡물떡밥' });
 Object.assign(BAITS.corn, { name: '들향 삶은 옥수수' });
@@ -228,6 +231,7 @@ for (const rod of RODS) applyFictionalProductName('rod', rod);
 ROD.name = RODS[0].name;
 for (const line of LINES) applyFictionalProductName('line', line);
 for (const float of FLOATS) applyFictionalProductName('float', float);
+configureHookModels(HOOKS);
 for (const hook of HOOKS) applyFictionalProductName('hook', hook);
 for (const ingredient of INGREDIENTS) applyFictionalProductName('ingredient', ingredient as unknown as BrandProduct);
 

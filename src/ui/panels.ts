@@ -399,7 +399,7 @@ const lineSpecText = (l: (typeof LINES)[number]) => {
   const material = lineMaterial(l);
   return `${lineGo(l)}호 · ${material.name} · 굵기 ${lineDiameter(l).toFixed(3)}mm · 강도 ${l.strength.toFixed(1)}kgf<br>늘어남 ${(material.stretchRatio * 100).toFixed(1)}% · 시인성 ${Math.round(l.visibility * material.visibilityScale * 100)}% · ${material.description}`;
 };
-const hookNumberText = (h: (typeof HOOKS)[number]) => `${h.name.match(/(\d+)호/)?.[1] ?? '?'}호`;
+const hookNumberText = (h: (typeof HOOKS)[number]) => `${h.size ?? h.name.match(/(\d+)호/)?.[1] ?? '?'}호`;
 const hookSpecText = (h: (typeof HOOKS)[number]) => {
   const traits = getHookTraits(h);
   return `${hookNumberText(h)} · ${traits.shapeLabel} · 축 ${traits.wireMm.toFixed(2)}mm · ${traits.barbed ? '미늘 있음' : '무미늘'}<br>폭 ${hookGap(h).toFixed(1)}mm · 하중 ${hookLoad(h).toFixed(1)}kgf · 날카로움 ×${hookSharpness(h).toFixed(2)}`;
@@ -411,7 +411,7 @@ const floatSpecText = (f: (typeof FLOATS)[number]) => `${FLOAT_SHAPE_LABELS[f.sh
 
 export function shopPanel(c: PanelCtx) {
   const p = c.player, d = p.data;
-  type ShopItem = { id: string; name: string; price: number; level?: number; rarity?: Rarity; desc?: string };
+  type ShopItem = { id: string; name: string; price: number; level?: number; rarity?: Rarity; desc?: string; modelId?: string; modelName?: string };
   const goal = p.shopGoal;
   let visibleCount = 0;
   const brandOf = (kind: ShopKind, item: ShopItem) => productBrand(kind, item as BrandProduct);
@@ -427,7 +427,7 @@ export function shopPanel(c: PanelCtx) {
   const ordered = <T extends ShopItem>(kind: ShopKind, list: readonly T[]) => list.slice().sort((a, b) => itemQuality(kind, a.id).tier - itemQuality(kind, b.id).tier || a.price - b.price);
   const sectionForBrand = (brandId: string, count: number, cards: string) => {
     const brand = gameBrand(brandId);
-    return `<section class="shop-brand-group"><header class="shop-brand-heading"><div><b>${brand.name}</b><small>${esc(brand.signature)}</small></div><span>${count}개</span></header><div class="shop-brand-items">${cards}</div></section>`;
+    return `<section class="shop-brand-group"><header class="shop-brand-heading"><div><b>${brand.name}</b><small>${esc(brand.signature)}</small></div><span>${count}개 제품</span></header><div class="shop-brand-items">${cards}</div></section>`;
   };
   const brandCards = <T extends ShopItem>(kind: ShopKind, list: readonly T[], render: (item: T) => string) => {
     const groups = new Map<string, T[]>();
@@ -499,7 +499,7 @@ export function shopPanel(c: PanelCtx) {
   const specGroups = <T extends ShopItem>(kind: ShopKind, list: T[], size: (t: T) => number, cols: (t: T) => string[], head: string[], sharedColumns: number[], value: (t: T) => TackleValue, keyColumn: number) => {
     const groups = new Map<string, T[]>();
     for (const t of list) {
-      const model = t.name.replace(/\s*[\d.]+호/, '').trim();
+      const model = t.modelId ?? t.name.replace(/\s*[\d.]+호/, '').trim();
       const items = groups.get(model) ?? [];
       // 구 저장용 별칭 ID가 남아 있는 동일 규격은 한 번만 표시한다.
       const duplicate = items.findIndex(x => x.name === t.name && x.price === t.price && cols(x).join('|') === cols(t).join('|'));
@@ -511,7 +511,7 @@ export function shopPanel(c: PanelCtx) {
     const opened = [...groups].find(([model]) => c.ui.shopModel === `${kind}:${model}`);
     if (opened) {
       detailOpen = true;
-      return tackleDetail(kind, opened[0], opened[1], cols, head, sharedColumns, value);
+      return tackleDetail(kind, opened[1][0].modelName ?? opened[0], opened[1], cols, head, sharedColumns, value);
     }
     const visibleGroups = [...groups].map(([model, items]): [string, T[]] => [model, items.filter(t => matches(kind, t))])
       .filter(([, items]) => items.length > 0)
@@ -525,12 +525,12 @@ export function shopPanel(c: PanelCtx) {
       const prices = all.filter(t => t.price > 0 && !p.owns(kind, t.id)).map(t => t.price);
       const minLevel = Math.min(...all.map(t => t.level ?? 1));
       const locked = minLevel > p.level;
-      const price = prices.length ? `${won(Math.min(...prices))}${prices.length > 1 ? '부터' : ''}` : owned ? '모두 보유' : '기본 지급';
+      const price = prices.length ? `${won(Math.min(...prices))}${new Set(prices).size > 1 ? '부터' : ''}` : owned ? '모두 보유' : '기본 지급';
       const cardHtml = `<button class="tackle-card ${locked ? 'locked' : ''} ${owned ? 'has-owned' : ''}" data-act="shop-model" data-id="${esc(`${kind}:${model}`)}">
         <span class="tackle-card-art r-${first.rarity ?? 'common'}"><span class="slot-art">${itemIcon(kind, first.id)}</span>${locked ? `<i class="lock">${itemIcon('lock')}</i>` : ''}</span>
         <span class="tackle-card-body">
           <span class="tackle-card-tags"><span class="shop-brand-tag">${brand.name}</span>${qualityBadge(kind, first.id)}${owned ? `<span class="tackle-owned">보유 ${owned}/${all.length}</span>` : ''}</span>
-          <b>${esc(model)}</b>
+          <b>${esc(first.modelName ?? model)}</b>
           <small>${esc(q.purpose)}</small>
           <span class="tackle-card-meta">${range(plain(cols(first)[0]), plain(cols(last)[0]))} · ${head[keyColumn]} ${range(plain(cols(first)[keyColumn]), plain(cols(last)[keyColumn]))}</span>
           <span class="tackle-card-price">${locked ? `Lv.${minLevel} 필요` : price}</span>
@@ -548,7 +548,7 @@ export function shopPanel(c: PanelCtx) {
     const shared = sharedColumns.filter(i => items.every(t => cols(t)[i] === firstCols[i]));
     const varying = head.map((_, i) => i).filter(i => i > 0 && !shared.includes(i));
     const reason = value(first);
-    const comparison = items.length === 1 && reason.reference && reason.changes.length
+    const comparison = (kind === 'hook' || items.length === 1) && reason.reference && reason.changes.length
       ? `<div class="tackle-comparison"><small>${esc(reason.reference)} 대비</small><strong>${reason.changes.map(esc).join(' · ')}</strong></div>` : '';
     visibleCount += items.length;
     return `<section class="tackle-detail" style="--tackle-columns:${varying.length}">
@@ -585,11 +585,15 @@ export function shopPanel(c: PanelCtx) {
     KEEPNETS.forEach(item => brandCandidates.push(['keepnet', item]));
   }
   const brandCounts = new Map<string, number>();
+  const countedProducts = new Set<string>();
   for (const [kind, item] of brandCandidates) {
+    const productKey = `${kind}:${item.modelId ?? item.id}`;
+    if (countedProducts.has(productKey)) continue;
+    countedProducts.add(productKey);
     const id = brandIdForProduct(kind, item);
     brandCounts.set(id, (brandCounts.get(id) ?? 0) + 1);
   }
-  const brandTabs: [string, string][] = [['all', `전체 ${brandCandidates.length}`], ...GAME_BRANDS.filter(brand => brandCounts.has(brand.id))
+  const brandTabs: [string, string][] = [['all', `전체 ${countedProducts.size}`], ...GAME_BRANDS.filter(brand => brandCounts.has(brand.id))
     .map(brand => [brand.id, `${brand.name} ${brandCounts.get(brand.id)}`] as [string, string])];
   const chosenBrand = c.ui.shopBrand ? gameBrand(c.ui.shopBrand) : undefined;
   const brandIntro = chosenBrand ? `<aside class="shop-brand-intro"><div><b>${chosenBrand.name}</b><small>${esc(chosenBrand.specialty)} · ${esc(chosenBrand.signature)}</small></div><details><summary>브랜드 이야기</summary><p>${esc(chosenBrand.story)}</p></details></aside>` : '';
@@ -619,7 +623,7 @@ export function shopPanel(c: PanelCtx) {
       return [`<b>${lineGo(l)}호</b>`, `<span title="${esc(material.description)}">${material.name}</span>`, `${lineDiameter(l).toFixed(3)}mm`, `${l.strength.toFixed(1)}kgf`, `${(material.stretchRatio * 100).toFixed(1)}%`, `${Math.round(l.visibility * material.visibilityScale * 100)}%`];
     }, ['호수', '재질', '굵기', '강도', '늘어남', '눈에 띔 ↓'], [1, 4], lineValue, 3); break;
     case 'float': body = brandCards('float', ordered('float', FLOATS), f => card('float', f, itemIcon('float', f.id), floatSpecs(f))); break;
-    case 'hook': body = specGroups('hook', HOOKS, h => +(h.name.match(/(\d+)호/)?.[1] ?? 0), h => {
+    case 'hook': body = specGroups('hook', HOOKS, h => h.size ?? +(h.name.match(/(\d+)호/)?.[1] ?? 0), h => {
       const traits = getHookTraits(h);
       return [`<b>${hookNumberText(h)}</b>`, traits.shapeLabel, `${traits.wireMm.toFixed(2)}mm`, traits.barbed ? '있음' : '무미늘', `${hookGap(h).toFixed(1)}mm`, `${hookLoad(h).toFixed(1)}kgf`, `×${hookSharpness(h).toFixed(2)}`];
     }, ['호수', '형태', '바늘 축', '미늘', '바늘 폭', '하중', '날카로움'], [1, 2, 3, 6], hookValue, 5); break;

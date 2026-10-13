@@ -105,7 +105,7 @@
 #hud .quality-shop .tackle-card-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; min-height: 18px; }
 #hud .quality-shop .tackle-card-tags .item-quality { margin: 0; }
 #hud .quality-shop .tackle-owned { padding: 1px 5px; font-size: 10px; color: #f3f6e4; background: #5f7f3a; }
-#hud .quality-shop .tackle-card-body > b { font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; }
+#hud .quality-shop .tackle-card-body > b { font-size: 13px; line-height: 1.4; word-break: keep-all; overflow-wrap: anywhere; }
 #hud .quality-shop .tackle-card-body > small { font-size: 10px; color: #59634b; }
 #hud .quality-shop .tackle-card-meta { font-size: 10px; color: #3f4836; font-variant-numeric: tabular-nums; }
 #hud .quality-shop .tackle-card-price { margin-top: auto; padding-top: 4px; font-size: 12px; font-weight: 700; color: #364821; font-variant-numeric: tabular-nums; }

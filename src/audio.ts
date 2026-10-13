@@ -1,5 +1,5 @@
 // 소리: 파일 없이 Web Audio로 합성한다.
-// 배경: 잔잔한 바람·물가 찰랑임 + 낮에는 새, 해 질 녘부터 귀뚜라미·개구리, 비 오면 빗소리.
+// 배경: 낮에는 새, 해 질 녘부터 귀뚜라미·개구리. 연속 노이즈(바람·물·비)는 재생하지 않는다.
 // 효과: 캐스팅·찌 착수. 입질은 소리 없이 찌로만 본다. (챔질·원줄 울음 소리는 나중에 녹음 소리로 넣는다)
 
 export class Sound {
@@ -18,7 +18,6 @@ export class Sound {
   /** 0 낮 ~ 1 밤 */
   private dark = 0;
   private raining = false;
-  private rainGain: GainNode | null = null;
   private cricketT = 1;
   private frogT = 4;
 
@@ -63,46 +62,6 @@ export class Sound {
       b2 = 0.95 * b2 + w * 0.048;
       d[i] = (b0 + b1 + b2 + w * 0.02) * 2.2;
     }
-
-    // 바람: 낮게 깔린 노이즈, 천천히 세졌다 약해진다
-    const wind = this.loop(0.0);
-    const wf = ctx.createBiquadFilter();
-    wf.type = 'lowpass';
-    wf.frequency.value = 260;
-    const wg = ctx.createGain();
-    wg.gain.value = 0.03;
-    const lfo = ctx.createOscillator();
-    lfo.frequency.value = 0.05;
-    const lfoG = ctx.createGain();
-    lfoG.gain.value = 0.018;
-    lfo.connect(lfoG).connect(wg.gain);
-    lfo.start();
-    wind.connect(wf).connect(wg).connect(this.master);
-
-    // 물가 찰랑임
-    const lap = this.loop(0.7);
-    const lf = ctx.createBiquadFilter();
-    lf.type = 'bandpass';
-    lf.frequency.value = 900;
-    lf.Q.value = 0.8;
-    const lg = ctx.createGain();
-    lg.gain.value = 0.025;
-    const lfo2 = ctx.createOscillator();
-    lfo2.frequency.value = 0.35;
-    const lfo2G = ctx.createGain();
-    lfo2G.gain.value = 0.02;
-    lfo2.connect(lfo2G).connect(lg.gain);
-    lfo2.start();
-    lap.connect(lf).connect(lg).connect(this.master);
-
-    // 빗소리: 비 올 때만 들리는 쏴아
-    const rain = this.loop(1.6);
-    const rf = ctx.createBiquadFilter();
-    rf.type = 'highpass';
-    rf.frequency.value = 1400;
-    this.rainGain = ctx.createGain();
-    this.rainGain.gain.value = 0;
-    rain.connect(rf).connect(this.rainGain).connect(this.master);
 
     // 릴 소리 대신, 민장대와 원줄의 하중을 낮은 긴장음으로 전달한다.
     this.loadFilter = ctx.createBiquadFilter();
@@ -169,7 +128,7 @@ export class Sound {
   }
 
 
-  /** 시간·날씨: 낮엔 새, 어두워지면 귀뚜라미·개구리, 비 오면 빗소리 */
+  /** 시간·날씨에 따라 낮에는 새, 밤에는 귀뚜라미·개구리 소리를 조절한다 */
   setAmbience(dark: number, raining: boolean) {
     this.dark = dark;
     this.raining = raining;
@@ -196,7 +155,6 @@ export class Sound {
       this.creakT = 0.18 + (1 - stress) * 0.25;
     }
     this.lastLoad = stress;
-    this.rainGain?.gain.setTargetAtTime(this.raining ? 0.045 : 0, t, 1.5);
     // 낮: 가끔 멀리서 새가 운다
     this.birdT -= dt;
     if (this.birdT <= 0) {

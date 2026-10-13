@@ -34,6 +34,7 @@ export const gameBrand = (id: string) => BRAND_BY_ID.get(id) ?? GAME_BRANDS[15];
 
 export interface BrandProduct {
   id: string; name: string; price?: number; level?: number; rarity?: string;
+  brandId?: string; modelId?: string; modelName?: string; size?: number;
   power?: number; flex?: number; length?: number; sensitivity?: number; sway?: number; notches?: number; shape?: string;
   light?: string; material?: string; diameterMm?: number; strength?: number; visibility?: number; hold?: number; wireMm?: number; sharpness?: number; gapMm?: number;
   qualityTier?: number; baseBait?: string; origin?: string; maxKg?: number; capacity?: number;
@@ -42,6 +43,7 @@ const n = (item: BrandProduct, key: keyof BrandProduct) => Number(item[key] ?? 0
 const s = (item: BrandProduct, key: keyof BrandProduct) => String(item[key] ?? '');
 
 export function brandIdForProduct(kind: BrandProductKind, item: BrandProduct): string {
+  if (item.brandId && BRAND_BY_ID.has(item.brandId)) return item.brandId;
   if (kind === 'rod') {
     if (n(item, 'price') <= 250) return 'sodam';
     if (n(item, 'power') >= 10 || (n(item, 'power') >= 5.5 && n(item, 'flex') < 1.7)) return 'gangsim';
@@ -122,6 +124,7 @@ function brandedName(kind: BrandProductKind, item: BrandProduct, brand: GameBran
     return `${brand.name} ${material} 원줄 ${size}호`;
   }
   if (kind === 'hook') {
+    if (item.modelName && item.size) return `${item.modelName} ${item.size}호`;
     const number = numberFromName(original, '호') ?? String(Math.max(3, Math.round(n(item, 'gapMm') || n(item, 'hold') * 5)));
     const series = n(item, 'hold') >= 3.2 ? '강축' : n(item, 'sharpness') >= 1.16 || item.shape === 'fine' ? '세축' : '표준';
     return `${brand.name} ${series} 바늘 ${number}호`;
