@@ -96,9 +96,10 @@ body.touch .start-card .btn.primary { min-height: 52px; }
 
 /* ── 휴대폰(낮은 가로 화면·좁은 화면): 패널이 화면을 꽉 채운다 ── */
 @media (max-height: 600px), (max-width: 760px) {
-  body.touch .modal { place-items: stretch; background: #101a0fcc; }
-  body.touch .modal .panel:not(.small) { width: 100%; max-width: none; height: 100dvh; max-height: none; margin: 0; border-width: 0; border-radius: 0; box-shadow: none; overflow-y: auto;
-    padding: calc(12px + var(--sat)) calc(16px + var(--sar)) calc(16px + var(--sab)) calc(16px + var(--sal)); }
+  /* 창은 화면을 꽉 채우지 않고 가운데에 띄운다 (뒤의 게임이 보이도록 사방에 여백). 노치·홈 막대 여백은 모달이 맡는다 */
+  body.touch .modal { place-items: center; background: #101a0f99;
+    padding: calc(max(8px, 4dvh) + var(--sat)) calc(max(16px, 6vw) + var(--sar)) calc(max(8px, 4dvh) + var(--sab)) calc(max(16px, 6vw) + var(--sal)); }
+  body.touch .modal .panel:not(.small) { width: min(100%, 780px); max-width: none; height: auto; max-height: 100%; margin: 0; overflow-y: auto; padding: 10px 16px 14px; }
   body.touch .modal .panel h2 { font-size: 18px; margin-bottom: 10px; }
   body.touch .start .start-card { width: min(640px, 100%); padding: 18px; }
   body.touch .start-card h1 { font-size: 30px; margin: 6px 0 8px; }
@@ -110,7 +111,7 @@ body.touch .start-card .btn.primary { min-height: 52px; }
    패널은 이미 화면을 꽉 채우지만, 안의 칸·그림·글자·버튼이 PC 값 그대로라
    창이 너무 크게 보였다. 가로 휴대폰(높이 ~400px)에서 한 화면에 더 많이 보이게 한다. */
 @media (max-height: 600px), (max-width: 760px) {
-  body.touch .modal .panel:not(.small) { padding: calc(8px + var(--sat)) calc(12px + var(--sar)) calc(10px + var(--sab)) calc(12px + var(--sal)); }
+  body.touch .modal .panel:not(.small) { padding: 8px 14px 10px; }
   body.touch .modal .panel h2 { font-size: 16px; line-height: 1.3; margin-bottom: 6px; }
   body.touch .modal .panel h3 { margin: 12px 0 6px; font-size: 13px; }
   body.touch .panel .kicker { font-size: 11px; }

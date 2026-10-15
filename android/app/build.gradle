@@ -5,7 +5,7 @@ def signingReady = signingNames.every { System.getenv(it)?.trim() }
 android {
     namespace 'com.deepchoi.fishing'
     compileSdk 36
-    defaultConfig { applicationId 'com.deepchoi.fishing'; minSdk 24; targetSdk 36; versionCode 2; versionName '1.0.1' }
+    defaultConfig { applicationId 'com.deepchoi.fishing'; minSdk 24; targetSdk 36; versionCode 3; versionName '1.0.2' }
     signingConfigs {
         release {
             if (signingReady) {
@@ -19,7 +19,11 @@ android {
     buildTypes { release { minifyEnabled false; if (signingReady) signingConfig signingConfigs.release } }
 }
 // Google's browser helper preserves HTTPS origin, browser authentication, files and microphone APIs.
-dependencies { implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.7.4' }
+// androidx.browser는 LauncherActivity 서브클래스(노치 영역 사용)가 직접 쓰므로 명시한다.
+dependencies {
+    implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.7.4'
+    implementation 'androidx.browser:browser:1.10.0'
+}
 tasks.configureEach { task ->
     if (task.name in ['bundleRelease', 'assembleRelease']) {
         task.doFirst { if (!signingReady) throw new GradleException('Release upload signing is missing; refusing an unsigned release.') }
