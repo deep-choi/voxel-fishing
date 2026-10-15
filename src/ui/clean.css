@@ -180,8 +180,20 @@ body.touch .net-gauge { top: 8px; left: 8px; width: 56px; height: 56px; }
 /* 시작 화면: 제목 · 한 줄 안내 · 로그인 버튼만 */
 .start-card .btn.primary { margin-top: 4px; }
 .start-card .admission-note { margin: 10px 0 0; }
-.start-card .start-account { display: block; margin: 12px auto 0; }
-.start-card .start-account[hidden] { display: none; }
+/* 보조 링크: 주 버튼(입장)만 눈에 띄고, 계정·심사용 로그인은 작은 글씨 한 줄 */
+.start-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 0 14px; margin-top: 10px; }
+.start-link { font: inherit; font-size: 12px; min-height: 32px; padding: 4px 6px; color: var(--dim); background: none; border: 0; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.start-link:hover { color: var(--ink); }
+.start-link[hidden] { display: none; }
+.start-card .tip { margin-top: 6px; }
+/* 낮은 화면(창을 낮게 쓰는 PC·가로 휴대폰): 경고 문구가 떠도 스크롤 없이 들어오게 압축 */
+@media (max-height: 460px) {
+  body.voxel .start .start-card { padding: 14px 22px; }
+  body.voxel .start-card h1 { font-size: 30px; margin: 2px 0 4px; }
+  body.voxel .start-card .lead { margin-bottom: 10px; }
+  body.voxel .start-card .btn.primary { padding: 11px 18px; }
+  body.voxel .start-card .tip { display: none; }
+}
 
 /* 조과 카드: 화면 가운데. 버튼 글자는 한 줄로 */
 #hud .catch { inset: 0; transform: none; place-items: center; pointer-events: none; }

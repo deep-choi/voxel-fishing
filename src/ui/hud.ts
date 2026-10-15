@@ -96,17 +96,18 @@ export class Hud {
 <div class="start" data-ref="start">
   <div class="start-card">
     <p class="kicker">민물 찌낚시</p>
-    <h1>좌대 낚시</h1>
-    <p class="lead">구글 계정으로 로그인하면 ${ACTIVE_FISHERY.name}에서 바로 시작해요.</p>
+    <h1>네모낚시</h1>
+    <p class="lead">${ACTIVE_FISHERY.name}에서 바로 시작해요</p>
     <button class="btn primary" data-act="start" data-ref="entry" disabled>계정 확인 중…</button>
-    <button class="btn small start-account" data-act="menu" data-id="account">심사용 로그인</button>
     <p class="admission-note" data-ref="admission" role="alert" hidden></p>
     <p class="admission-note" data-ref="loginError" role="alert" hidden></p>
-    <button class="btn small start-account" data-act="menu" data-id="account" data-ref="onlineEntry" hidden>계정 · 닉네임</button>
+    <div class="start-links">
+      <button class="start-link" data-act="menu" data-id="account" data-ref="onlineEntry" hidden>계정 · 닉네임</button>
+      <button class="start-link" data-act="menu" data-id="account" data-ref="reviewEntry">심사용 로그인</button>
+    </div>
     <p class="tip">조작법은 게임 안 메뉴(☰)에서 볼 수 있어요</p>
   </div>
 </div>
-<div class="rotate-note"><b>화면을 가로로 돌려 주세요</b><small>낚시는 가로 화면에서 즐길 수 있어요</small></div>
 <div class="place" data-ref="place"></div>
 <button class="net-gauge" data-ref="netg" data-act="menu" data-id="keepnet" title="살림망 (Tab)" aria-label="살림망 열기" hidden></button>
 <div class="corner" data-ref="corner" hidden>
@@ -158,6 +159,7 @@ export class Hud {
     const rerender = () => this.renderModal();
     switch (t.dataset.act) {
       case 'start':
+        if (this.online.uid && this.online.saveError) { this.h.online('retry-save'); break; }
         if (this.enterGame()) break;
         if (this.online.uid && this.online.nickname) this.h.online('enter');
         else if (this.online.uid) this.open('account');
@@ -311,7 +313,7 @@ export class Hud {
   }
   /** 버튼·인증 복원·디버그 입장에 같은 인증 조건을 적용한다. */
   enterGame() {
-    if (!this.online.ready || !this.online.uid || !this.online.nickname || !this.online.admitted || this.online.busy) return false;
+    if (!this.online.ready || !this.online.uid || !this.online.saveReady || !this.online.nickname || !this.online.admitted || this.online.busy) return false;
     if (this.started) return true;
     this.started = true;
     this.el.start.hidden = true;
@@ -327,10 +329,16 @@ export class Hud {
     this.el.onlineEntry.textContent = state.nickname ? `${state.nickname} · 계정` : '계정 · 닉네임';
     // 로그인한 뒤에만 계정 버튼을 보이고, 로그인 실패 이유는 시작 화면에 바로 띄운다
     this.el.onlineEntry.hidden = !state.uid;
-    this.el.loginError.textContent = state.error;
-    this.el.loginError.hidden = !state.error;
-    (this.el.entry as HTMLButtonElement).disabled = !state.ready || state.busy || state.entering;
-    this.el.entry.textContent = !state.ready ? '계정 확인 중…' : state.entering ? '입장 확인 중…' : state.busy ? '연결 중…' : state.uid ? state.nickname ? '버들못 입장 →' : '닉네임 설정 후 입장' : 'Google 로그인하고 입장 →';
+    // 심사용 로그인은 로그인 전에만 (스토어 심사 계정 진입로)
+    this.el.reviewEntry.hidden = !!state.uid;
+    this.el.loginError.textContent = state.error || state.saveError;
+    this.el.loginError.hidden = !(state.error || state.saveError);
+    // 진행 저장을 불러오는 중에는 기다리고, 실패하면 같은 버튼으로 다시 시도한다
+    const loadingSave = !!state.uid && !state.saveReady && !state.saveError;
+    (this.el.entry as HTMLButtonElement).disabled = !state.ready || state.busy || state.entering || loadingSave;
+    this.el.entry.textContent = !state.ready ? '계정 확인 중…' : state.entering ? '입장 확인 중…' : state.busy ? '연결 중…'
+      : state.uid ? !state.saveReady ? state.saveError ? '진행 다시 불러오기' : '진행 불러오는 중…' : state.nickname ? '버들못 입장 →' : '닉네임 설정 후 입장'
+      : 'Google 로그인하고 입장 →';
     this.el.admission.textContent = state.admissionError;
     this.el.admission.hidden = !state.admissionError;
     this.updateCounts(); this.updateChat();

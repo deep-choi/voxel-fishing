@@ -12,7 +12,7 @@ import { BAITS, FLOATS, HOOKS, LINES, MAX_DEPLOYED_RODS, RODS, rodAction, type B
 import { ACTIVE_FISHERY, canEnterFishery, findFishery } from './game/fisheries';
 import { SPECIES, type SpeciesId } from './game/data';
 import type { OnlineService } from './game/online';
-import { emptyOnlineState, type OnlineTab } from './game/onlineState';
+import { emptyOnlineState, type OnlineTab, type SaveGate } from './game/onlineState';
 import { tournamentAvailable } from './game/tournament';
 import { Environment } from './game/environment';
 import { mods } from './game/modifiers';
@@ -21,6 +21,7 @@ import { Fishing } from './game/fishing';
 import { MountedRod } from './game/mountedRods';
 import { RemotePlayers } from './game/remotePlayers';
 import { PlayerProgress } from './game/profile';
+import { ProfileSync } from './game/profileSync';
 import { FishingGrounds } from './game/grounds';
 import { VoxelFishModel as FishModel } from './render/voxelFishModel';
 import { createPixelPass, type PixelLook } from './render/pixelPass';
@@ -166,7 +167,9 @@ if (pixelPass) composer.addPass(pixelPass);
 const pipCam = new THREE.PerspectiveCamera(20, 200 / 280, 0.02, 3000);
 pipCam.layers.enable(NO_REFLECT);
 
-const player = new PlayerProgress();
+// 진행은 로그인한 계정의 서버 저장을 불러온 뒤에 채운다 (profileSync.open → player.reload)
+const profileSync = new ProfileSync();
+const player = new PlayerProgress(profileSync);
 const grounds = new FishingGrounds();
 const env = new Environment();
 sky.setDaylight(Math.max(ACTIVE_FISHERY.id === 'moon' ? 0.22 : 0, env.daylight));
@@ -186,9 +189,21 @@ const sound = new Sound();
 sound.setVolume(settings.volume);
 let onlineService: OnlineService | null = null;
 let onlinePromise: Promise<OnlineService> | null = null;
+/** 로그인한 계정의 진행 저장을 불러와 채우고, 로그아웃하면 남은 저장을 보낸 뒤 새로고침해 이전 계정의 진행이 남지 않게 한다 */
+const saves: SaveGate = {
+  async open(uid) {
+    player.reload(await profileSync.open(uid));
+    idleGame.setRig(player.data.rig);
+  },
+  async close() {
+    if (!profileSync.opened) return;
+    await profileSync.flush().catch(() => {});
+    location.reload();
+  },
+};
 function connectOnline() {
   return onlinePromise ??= import('./game/online').then(({ OnlineService }) => {
-    onlineService = new OnlineService();
+    onlineService = new OnlineService(saves);
     onlineService.subscribe(state => { hud.setOnline(state); remotePlayers.setPlayers(state.players); });
     return onlineService;
   }).catch(error => {
@@ -207,7 +222,12 @@ let yaw = 0;
 let pitch = -0.08;
 let zoom = false;
 let brokenWarnAt = -1e9;
-let fov = 55;
+/** 기본 세로 시야각. 세로 화면은 좌우 시야가 좁아지지 않게 세로 시야를 넓힌다 (가로 화면은 55°, 세로는 최대 85°) */
+const baseFov = () => {
+  const aspect = innerWidth / innerHeight;
+  return aspect >= 1 ? 55 : Math.min(85, 2 * Math.atan(Math.tan(27.5 * Math.PI / 180) / aspect) * 180 / Math.PI);
+};
+let fov = baseFov();
 const input = { primary: false, lift: false, hookset: false, retrieve: false };
 
 const canvas = renderer.domElement;
@@ -261,6 +281,7 @@ const hud = new Hud(document.getElementById('hud')!, game, player, env, settings
       if (action === 'review-login') { const credentials = JSON.parse(value); await service.loginReview(credentials.email, credentials.password); }
       if (action === 'logout') await service.logout();
       if (action === 'enter') await service.enterFishery();
+      if (action === 'retry-save') await service.retrySave();
       if (action === 'nickname') await service.setNickname(value);
       if (action === 'accept-terms') await service.acceptTerms();
       if (action === 'unblock') service.unblockUser(value);
@@ -305,8 +326,8 @@ const hud = new Hud(document.getElementById('hud')!, game, player, env, settings
     saveSettings(settings);
   },
   reset() {
-    try { localStorage.removeItem('fishing-player-v1'); localStorage.removeItem('fishing-best'); } catch { /* 지울 수 없어도 새로고침 */ }
-    location.reload();
+    // 서버 저장까지 지운 뒤에 새로고침한다. 서버에 남기면 새로고침 때 그대로 되살아난다.
+    profileSync.wipe().then(() => location.reload()).catch(() => hud.toast('초기화하지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요', 'bad'));
   },
 });
 
@@ -318,7 +339,7 @@ const touch = new TouchControls(document.getElementById('hud')!, {
   move(x, y) { walk.w = y > 0.35; walk.s = y < -0.35; walk.d = x > 0.35; walk.a = x < -0.35; },
   look(dx, dy) {
     if (!exploring()) return;
-    const s = 0.0045 * settings.sensitivity * (fov / 55);
+    const s = 0.0045 * settings.sensitivity * (fov / baseFov());
     yaw -= dx * s;
     pitch = THREE.MathUtils.clamp(pitch - dy * s, -1.1, 0.6);
   },
@@ -336,8 +357,7 @@ const touch = new TouchControls(document.getElementById('hud')!, {
     if (action === 'interact') { if (game.phase === 'landed') finishCatch(true); else if (exploring()) interactSlot(); }
     if (action === 'retrieve') { if (game.phase === 'landed') finishCatch(false); else if (playing()) input.retrieve = true; }
     if (action === 'zoom' && exploring()) zoom = !zoom;
-    if (action === 'stow' && exploring()) removeRod();
-  },
+    if (action === 'stow' && exploring()) removeRod();  },
 });
 function applyTouch() {
   const on = touchEnabled(settings);
@@ -360,10 +380,9 @@ function touchLayout(interact: string, nearRod: boolean): TouchLayout {
       default: return NO_TOUCH;
     }
   }
-  // 대를 들지 않았을 때도 망원은 늘 쓸 수 있다
+  // 대를 들지 않았을 때도 확대는 늘 쓸 수 있다
   return { main: interact ? 'interact' : null, alt: null, chips: nearRod ? ['stow', 'zoom'] : ['zoom'], zoomOn: zoom, label: interact };
 }
-
 function joinTournament(id: string) {
   const def = TOURNAMENTS.find(t => t.id === id);
   if (!def) return;
@@ -390,7 +409,7 @@ document.addEventListener('pointerlockchange', () => {
 });
 document.addEventListener('mousemove', (e) => {
   if (!locked()) return;
-  const s = 0.0021 * settings.sensitivity * (fov / 55);
+  const s = 0.0021 * settings.sensitivity * (fov / baseFov());
   yaw -= e.movementX * s;
   pitch = THREE.MathUtils.clamp(pitch - e.movementY * s, -1.1, 0.6);
 });
@@ -444,7 +463,7 @@ addEventListener('keydown', (e) => {
   if (exploring() && !e.repeat && ['Digit1', 'Digit2', 'Digit3'].includes(e.code)) takeRod(Number(e.code.slice(-1)));
   if (exploring() && !e.repeat && e.code === 'KeyE') interactSlot();
   if (exploring() && !e.repeat && e.code === 'KeyF') removeRod();
-  // 망원: 대를 들지 않아도 둘러보며 확대할 수 있다
+  // 확대: 대를 들지 않아도 둘러보며 확대할 수 있다
   if (exploring() && !e.repeat && e.code === 'KeyZ') zoom = !zoom;
   if (!playing()) return;
   if (e.code === 'KeyR' && !e.repeat) input.retrieve = true;
@@ -471,11 +490,6 @@ function toggleModal(m: MenuModal) {
 }
 
 const busy = () => parking || ['charging', 'casting', 'flying', 'fighting', 'landed'].includes(game.phase);
-function savePlacement() {
-  player.data.placed = [...player.data.placed.filter(p => (p.fisheryId ?? 'willow') !== ACTIVE_FISHERY.id),
-    ...Array.from(mounted.values(), m => ({ slotId: m.slot.id, ownerId: m.game.ownerId, rig: m.game.rig, fisheryId: ACTIVE_FISHERY.id }))];
-  player.save();
-}
 function travelFishery(id: string) {
   const target = findFishery(id);
   if (target && !canEnterFishery(target.id)) { hud.toast('이 낚시터는 아직 준비 중이에요'); return; }
@@ -483,7 +497,7 @@ function travelFishery(id: string) {
   if (busy() || Array.from(mounted.values()).some(m => m.game.phase === 'fighting' || m.game.phase === 'landed')) { hud.toast('진행 중인 캐스팅이나 물고기 처리를 마친 뒤 낚시터를 옮겨 주세요'); return; }
   if (tournament) { hud.toast('대회를 마치거나 포기한 뒤 낚시터를 옮겨 주세요'); return; }
   // 다른 맵의 설치 위치는 설정으로 보관한다. 진행 중 입질은 이동 후 이어지지 않는다.
-  savePlacement();
+  player.save();
   if (player.saveFailed) { hud.toast('진행 저장에 실패했어요. 낚시터 이동을 멈췄습니다', 'bad'); return; }
   const url = new URL(location.href);
   url.searchParams.set('map', target.id);
@@ -518,7 +532,7 @@ function changeRig(kind: string, id: string, g: Fishing = game) {
   if (kind === 'depth') g.depthSet = Math.max(0.3, Math.min(g.rod.line, Number(id)));
   if (g === idleGame) player.data.rig = g.rig;
   Array.from(mounted.values()).find(m => m.game === g)?.renderNow();
-  savePlacement();
+  player.save();
 }
 function selectRod(next: MountedRod | null) {
   if (active) { active.group.visible = true; active.renderNow(); }
@@ -574,7 +588,7 @@ function prepareSlot(slot: RodSlot, rodId?: string) {
     mounted.set(slot.id, next);
     scene.add(next.group);
     connectGame(next.game);
-    savePlacement();
+    player.save();
   }
   selectRod(next);
 }
@@ -594,7 +608,10 @@ function takeRod(number: number) {
   const slot = placedHere ? undefined : seat?.slots[number - 1];
   const next = placedHere ?? (slot ? mounted.get(slot.id) : Array.from(mounted.values())[number - 1]);
   if (next && next === active) return;
-  if (active || busy()) { hud.toast('들고 있는 낚싯대를 먼저 거치하세요'); return; }
+  // 이미 든 대가 있으면 거치한 뒤 이어서 바꾼다 (거치 중에 또 누르면 무시)
+  if (active && parking && afterPark) return;
+  if (active && !busy()) { afterPark = () => takeRod(number); parkRod(); if (!parking) afterPark = null; return; }
+  if (active || busy()) { hud.toast('지금 낚시를 마친 뒤 바꿀 수 있어요'); return; }
   if (slot) prepareSlot(slot);
   else if (next) {
     if (!platforms.canReachSlot(PLAYER.x, PLAYER.z, next.slot)) { hud.toast(`${next.slot.platform}번 좌대 ${['왼쪽', '가운데', '오른쪽'][next.slot.seat - 1]} 받침틀로 가세요`); return; }
@@ -602,6 +619,9 @@ function takeRod(number: number) {
   } else { hud.toast('좌대로 이동한 뒤 낚싯대를 꺼내세요'); return; }
   if (hud.modal !== 'none') hud.close();
 }
+
+/** 지금 든 대를 거치한 뒤 이어서 할 일 (거치 동작이 끝나야 다음 대를 들 수 있다) */
+let afterPark: (() => void) | null = null;
 
 /** 가방에서 그 낚싯대를 꺼내 지금 좌대의 빈 받침대 자리에 든다 */
 function deployRod(rodId: string) {
@@ -624,7 +644,7 @@ function removeRod(target?: MountedRod) {
   if (active === placed) selectRod(null);
   mounted.delete(placed.slot.id);
   placed.dispose();
-  savePlacement();
+  player.save();
   const left = (player.data.rods[placed.game.rodId] ?? 0) - Array.from(mounted.values()).filter(m => m.game.rodId === placed.game.rodId).length;
   hud.toast(`${placed.game.rod.name}을(를) 가방에 넣었어요 · 가방에 ${left}대`, 'good');
 }
@@ -724,20 +744,7 @@ function connectGame(source: Fishing) { source.on((e) => {
   }
 }); }
 connectGame(idleGame);
-// 설치 위치와 채비를 복원한다. 진행 중인 입질·파이팅은 새 세션에서 시작하지 않는다.
-for (const saved of player.data.placed) {
-  if ((saved.fisheryId ?? 'willow') !== ACTIVE_FISHERY.id) continue;
-  if (mounted.size >= MAX_DEPLOYED_RODS) break;
-  const legacy = /^(\d+)-(\d)$/.exec(saved.slotId);
-  const slotId = legacy ? `${legacy[1]}-2-${legacy[2]}` : saved.slotId;
-  const slot = platforms.slots.find(s => s.id === slotId);
-  const count = Array.from(mounted.values()).filter(m => m.game.rodId === saved.rig.rodId).length;
-  if (!slot || mounted.has(slot.id) || count >= (player.data.rods[saved.rig.rodId] ?? 0)) continue;
-  const placed = new MountedRod(slot, player, grounds, saved.rig);
-  placed.game.biteBoost = idleGame.biteBoost;
-  placed.game.fastTest = idleGame.fastTest;
-  mounted.set(slot.id, placed); scene.add(placed.group); connectGame(placed.game);
-}
+// 설치한 낚싯대는 접속이 끝나면 가방으로 돌아온다. 공유 맵이라 지난 접속의 대를 같은 자리에 되살리지 않는다.
 
 function dropFishModel() {
   if (!fishModel) return;
@@ -784,7 +791,11 @@ const hang = { p: new THREE.Vector3(), prev: new THREE.Vector3(), init: false };
 function updatePose(dt: number) {
   if (active) {
     handBlend = THREE.MathUtils.clamp(handBlend + dt * (parking ? -5 : 5), 0, 1);
-    if (parking && handBlend <= 0) selectRod(null);
+    if (parking && handBlend <= 0) {
+      const next = afterPark; afterPark = null;
+      selectRod(null);
+      next?.();
+    }
   }
   const restElev = active ? rodRestElevation(game.rod.length, active.pose.butt.y) : 0;
   const aiming = game.phase === 'charging' || game.phase === 'casting' || game.phase === 'fighting';
@@ -1086,8 +1097,7 @@ function updateWalk(dt: number, t: number) {
         walk.warnAt = t;
       }
     } else {
-      // 걷기 시작하면 망원이 풀린다
-      zoom = false;
+      // 확대는 걸어 다녀도 유지된다 (끄는 건 확대 버튼·Z·챔질뿐)
       const fx = -Math.sin(yaw);
       const fz = -Math.cos(yaw);
       let dx = fx * iz + -fz * ix;
@@ -1137,7 +1147,7 @@ function updateCamera(dt: number, t: number) {
   const shakeCam = game.phase === 'fighting' && game.fish?.behavior === 'shake' ? load : 0;
   camera.rotation.set(pitch + Math.sin(t * 11) * load * 0.004 + Math.sin(t * 29) * (jolt * 0.012 + shakeCam * 0.004) - jolt * 0.01,
     yaw + Math.sin(t * 8) * load * 0.003 + Math.sin(t * 23) * shakeCam * 0.003, 0);
-  const targetFov = zoom ? 18 : 55;
+  const targetFov = zoom ? 18 : baseFov();
   fov += (targetFov - fov) * Math.min(1, dt * 6);
   if (Math.abs(camera.fov - fov) > 0.01) {
     camera.fov = fov;
@@ -1145,7 +1155,7 @@ function updateCamera(dt: number, t: number) {
   }
 }
 
-/** 찌 확대 창: 끔. 찌는 Z 망원으로 직접 본다 */
+/** 찌 확대 창: 끔. 찌는 Z 확대로 직접 본다 */
 const SHOW_PIP = false;
 function renderPip() {
   if (!SHOW_PIP) return false;
@@ -1240,7 +1250,7 @@ function frame(dt: number, render = true) {
   if (!paused) {
     if (hud.started) updateWorld(dt);
     grounds.update(dt);
-    // 챔질(대를 드는 순간) 망원이 풀린다
+    // 챔질(대를 드는 순간) 확대가 풀린다
     if (input.hookset && playing() && handBlend >= 0.85) zoom = false;
     // 부러진 낚싯대는 수리하기 전까지 던질 수 없다
     const broken = game.phase === 'ready' && player.wearOf(`rod:${game.rodId}`) >= 1;

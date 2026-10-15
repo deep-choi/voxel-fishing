@@ -2,8 +2,9 @@
 // 오른쪽 아래 상황 버튼. 몰입형 HUD에 맞춰 지금 할 수 있는 동작만 보인다.
 //   큰 버튼: 던지기(눌렀다 놓기) → 챔질(누른 채 버티면 그대로 세우기) → 세우기 처럼 상황마다 바뀐다
 //   보조 버튼: 걸었을 때 숙이기, 기다릴 때 채비 걷기
-//   작은 버튼: 거치 · 회수 · 망원처럼 그때 쓸 수 있는 것만
+//   작은 버튼: 거치 · 회수 · 확대처럼 그때 쓸 수 있는 것만
 // 마우스와 같은 입력 플래그를 건드리므로 낚시 규칙은 그대로 쓴다.
+// 입질·걸림을 알려 주는 버튼은 두지 않는다. 입질은 찌를 보고 직접 알아채는 게임이다.
 
 export type HoldKey = 'primary' | 'lift';
 export type TapAction = 'interact' | 'retrieve' | 'zoom' | 'stow';
@@ -35,20 +36,17 @@ const ACTS: Record<TouchAct, { label: string; sub?: string; hold?: HoldKey; tap?
   interact: { label: '들기', tap: 'interact' },
   park: { label: '거치', tap: 'interact' },
   retrieve: { label: '걷기', tap: 'retrieve' },
-  zoom: { label: '망원', tap: 'zoom' },
+  zoom: { label: '확대', tap: 'zoom' },
   stow: { label: '회수', tap: 'stow' },
 };
 const CHIPS = 3;
 
 let fullscreenDone = false;
-/** 가로 전체 화면 (안드로이드 크롬). 사용자 터치 안에서만 열리므로 실패하면 다음 터치에 다시 시도 */
+/** 전체 화면 (안드로이드 크롬). 가로·세로 모두 허용하므로 방향은 잠그지 않는다. 사용자 터치 안에서만 열리므로 실패하면 다음 터치에 다시 시도 */
 export function enterFullscreen() {
   const el = document.documentElement;
   if (fullscreenDone || document.fullscreenElement || !el.requestFullscreen) return;
-  el.requestFullscreen({ navigationUI: 'hide' }).then(() => {
-    fullscreenDone = true;
-    (screen.orientation as ScreenOrientation & { lock?(o: string): Promise<void> }).lock?.('landscape').catch(() => {});
-  }).catch(() => {});
+  el.requestFullscreen({ navigationUI: 'hide' }).then(() => { fullscreenDone = true; }).catch(() => {});
 }
 
 export class TouchControls {

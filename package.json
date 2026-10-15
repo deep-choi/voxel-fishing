@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test:feed": "node scripts/check-feed-mixing.mjs",
     "test:hooks": "node scripts/check-hook-catalog.mjs",
+    "test:save": "node scripts/check-save-sync.mjs && node scripts/check-profile-sync.mjs",
     "build:guide": "tsc --noEmit && node scripts/build-fishing-guide.mjs",
     "deploy": "npm run build && firebase deploy --only hosting,firestore:rules --project voxel-fishing-choi --non-interactive"
   },

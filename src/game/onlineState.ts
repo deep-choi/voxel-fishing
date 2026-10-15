@@ -20,7 +20,11 @@ export interface LocalPlayerPose {
   x: number; z: number; yaw: number;
   rodSlots: RemoteRodState[]; heldRod: RemoteHeldRodState | null;
 }
+/** 로그인한 계정의 진행 저장을 불러오고 닫는 쪽 (main.ts가 PlayerProgress와 연결한다) */
+export interface SaveGate { open(uid: string): Promise<void>; close(): Promise<void> }
 export interface OnlineState {
+  /** 이 계정의 진행 저장을 불러왔는지. 불러오기 전에는 입장하지 않는다 */
+  saveReady: boolean; saveError: string;
   termsAccepted: boolean; blockedUsers: Record<string, string>;
   uid: string | null; nickname: string; ready: boolean; busy: boolean; error: string;
   messages: ChatMessage[]; rankings: RankingEntry[]; loadingChat: boolean; loadingRanking: boolean;
@@ -28,4 +32,4 @@ export interface OnlineState {
   fisheryCounts: Partial<Record<FisheryId, number>>;
   players: RemotePlayerState[];
 }
-export const emptyOnlineState = (): OnlineState => ({ termsAccepted: false, blockedUsers: {}, uid: null, nickname: '', ready: false, busy: false, error: '', messages: [], rankings: [], loadingChat: false, loadingRanking: false, admitted: false, entering: false, admissionError: '', fisheryCounts: {}, players: [] });
+export const emptyOnlineState = (): OnlineState => ({ saveReady: false, saveError: '', termsAccepted: false, blockedUsers: {}, uid: null, nickname: '', ready: false, busy: false, error: '', messages: [], rankings: [], loadingChat: false, loadingRanking: false, admitted: false, entering: false, admissionError: '', fisheryCounts: {}, players: [] });

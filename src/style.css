@@ -583,12 +583,12 @@ body.voxel {
   --ink: #f7f3e8;
   --dim: rgba(247, 243, 232, 0.65);
 }
-.start { place-items: center start; padding: 5vw; background: linear-gradient(90deg, rgba(11, 28, 25, 0.6), transparent 80%); }
-.start-card { width: min(430px, calc(100vw - 32px)); background: rgba(19, 38, 32, 0.9); padding: 30px; border-radius: 8px; box-shadow: 0 18px 70px #10271d44; }
-.start-card h1 { font-size: 48px; margin: 12px 0 14px; letter-spacing: -0.055em; }
-.start-card .lead { font-size: 15px; line-height: 1.8; margin-bottom: 24px; }
+.start { place-items: center; padding: 16px; background: radial-gradient(ellipse at 50% 55%, rgba(11, 28, 25, 0.25), rgba(11, 28, 25, 0.72)); }
+.start-card { width: min(430px, calc(100vw - 32px)); text-align: center; background: rgba(19, 38, 32, 0.9); padding: 30px; border-radius: 8px; box-shadow: 0 18px 70px #10271d44; }
+.start-card h1 { font-size: 48px; margin: 12px 0 10px; letter-spacing: -0.055em; }
+.start-card .lead { font-size: 15px; line-height: 1.8; margin-bottom: 22px; }
 .start-card .keys { font-size: 12px; gap: 10px; line-height: 1.7; }
-.start-card .btn.primary { width: 100%; display: flex; justify-content: space-between; padding: 15px 18px; border-radius: 5px; }
+.start-card .btn.primary { width: 100%; display: block; text-align: center; padding: 15px 18px; border-radius: 5px; }
 .start-card .tip { text-align: center; font-size: 12px; }
 .place { top: 26px; left: 26px; align-items: center; gap: 16px; }
 .place b { font-size: 19px; letter-spacing: -0.04em; }

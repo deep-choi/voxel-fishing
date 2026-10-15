@@ -4,7 +4,7 @@ import { auth, db } from './firebase';
 import { ACTIVE_FISHERY, FISHERIES, type FisheryId } from './fisheries';
 import type { Catch } from './fishing';
 import { SPECIES_LIST, type SpeciesId } from './data';
-import { emptyOnlineState, type LocalPlayerPose, type OnlineState, type OnlineTab, type ChatMessage, type RankingEntry } from './onlineState';
+import { emptyOnlineState, type LocalPlayerPose, type OnlineState, type OnlineTab, type ChatMessage, type RankingEntry, type SaveGate } from './onlineState';
 import { FisheryPresence } from './presence';
 import { COMMUNITY_TERMS_VERSION, readBlockedUsers, saveBlockedUsers } from './community';
 
@@ -33,10 +33,12 @@ export class OnlineService {
   private sentAt = 0;
   private listeners = new Set<(state: OnlineState) => void>();
   private readonly presence: FisheryPresence;
+  /** 이번 입장 때 이미 있던 채팅 id. 공유 맵이라 지난 채팅·조과 로그는 보이지 않고, 입장한 뒤 올라온 것만 보인다 */
+  private chatHistory: Set<string> | null = null;
   private rawMessages: ChatMessage[] = [];
   private rawRankings: RankingEntry[] = [];
   private rawPlayers: OnlineState['players'] = [];
-  constructor() {
+  constructor(private readonly saves: SaveGate) {
     this.presence = new FisheryPresence(state => {
       const changed = this.state.admitted !== state.admitted;
       Object.assign(this.state, state);
@@ -73,12 +75,13 @@ export class OnlineService {
       }
     }
     this.user = user;
-    this.rawMessages = []; this.rawRankings = []; this.rawPlayers = [];
+    this.rawMessages = []; this.rawRankings = []; this.rawPlayers = []; this.chatHistory = null;
     Object.assign(this.state, emptyOnlineState(), { uid: user?.uid ?? null, ready: !user });
     if (user) this.state.blockedUsers = readBlockedUsers(user.uid);
     this.presence.setUser(user?.uid ?? null);
     this.emit();
-    if (!user) { this.listen(); return; }
+    if (!user) { this.listen(); await this.saves.close(); return; }
+    void this.openSave(user.uid, epoch);
     this.profileStop = onSnapshot(doc(db, 'players', user.uid), snapshot => {
       if (epoch !== this.epoch) return;
       const before = this.state.nickname;
@@ -90,6 +93,28 @@ export class OnlineService {
       this.emit();
       if (this.state.nickname && this.state.termsAccepted && !this.state.admitted && !this.state.admissionError) void this.enterFishery();
     }, error => { if (epoch === this.epoch) { this.state.ready = true; this.state.error = message(error); this.emit(); } });
+  }
+  /** 이 계정의 진행 저장을 불러온다. 실패하면 입장을 막고(새 진행이 서버 저장을 덮어쓰지 않게) 다시 시도하게 한다 */
+  private async openSave(uid: string, epoch: number) {
+    this.state.saveError = '';
+    try {
+      await this.saves.open(uid);
+      if (epoch !== this.epoch) return;
+      this.state.saveReady = true;
+    } catch (error) {
+      if (epoch !== this.epoch) return;
+      console.error('진행 저장 불러오기 실패', error);
+      const code = (error as { code?: string }).code ?? '';
+      this.state.saveError = code === 'permission-denied'
+        ? '진행 저장 권한이 없어요 (서버 규칙 미배포일 수 있어요). 로그아웃 후 다시 로그인해 보고, 계속되면 문의해 주세요'
+        : '진행 데이터를 불러오지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요';
+    }
+    this.emit();
+  }
+  async retrySave() {
+    if (!this.user || this.state.saveReady) return;
+    this.state.saveError = ''; this.emit();
+    await this.openSave(this.user.uid, this.epoch);
   }
   async login() {
     if (this.state.busy) return;
@@ -196,11 +221,19 @@ export class OnlineService {
     if (!this.state.admitted) {
       this.roomStop?.(); this.roomStop = undefined;
       this.state.messages = []; this.state.loadingChat = false;
+      this.chatHistory = null;
     }
     if (!this.roomStop && this.state.admitted && this.user && this.state.nickname) {
       this.state.loadingChat = true;
-      this.roomStop = onSnapshot(query(collection(db, 'rooms', ACTIVE_FISHERY.id, 'messages'), orderBy('createdAt', 'desc'), limit(50)), snapshot => {
-        this.rawMessages = snapshot.docs.map(d => ({ id: d.id, ...d.data(), at: atMillis(d.data().createdAt) }) as ChatMessage).reverse();
+      // includeMetadataChanges: 캐시에서 먼저 온 뒤 서버와 맞춰졌을 때(내용은 같음)도 알림을 받아야 입장 기준을 잡을 수 있다
+      this.roomStop = onSnapshot(query(collection(db, 'rooms', ACTIVE_FISHERY.id, 'messages'), orderBy('createdAt', 'desc'), limit(50)), { includeMetadataChanges: true }, snapshot => {
+        // 서버가 준 첫 목록이 "입장 전 채팅"이다. 캐시에서 먼저 온 목록은 기준으로 삼지 않는다 (시계도 쓰지 않아 기기 시각이 틀려도 안전)
+        if (!this.chatHistory) {
+          if (snapshot.metadata.fromCache) return;
+          this.chatHistory = new Set(snapshot.docs.map(d => d.id));
+        }
+        const history = this.chatHistory;
+        this.rawMessages = snapshot.docs.filter(d => !history.has(d.id)).map(d => ({ id: d.id, ...d.data(), at: atMillis(d.data().createdAt) }) as ChatMessage).reverse();
         this.filterBlocked();
         this.state.loadingChat = false; this.emit();
       }, error => { this.state.loadingChat = false; this.state.error = message(error); this.emit(); });

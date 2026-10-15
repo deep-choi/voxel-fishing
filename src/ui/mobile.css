@@ -1,6 +1,6 @@
 /* ─────────────────────────────────────────────
    모바일(터치) 화면. body.touch일 때만 적용된다.
-   · 가로 화면 기준. 노치·홈 막대를 피해(safe-area) 가장자리에 붙인다
+   · 가로 화면이 기본, 세로 휴대폰은 맨 아래 세로용 규칙. 노치·홈 막대를 피해(safe-area) 가장자리에 붙인다
    · 손가락 크기 버튼(44px 이상), 키보드 글자(kbd)는 숨긴다
    · 오른쪽 아래 상황 버튼은 지금 할 수 있는 동작만 (touch.ts)
    · 휴대폰에서는 메뉴 패널이 화면을 꽉 채우고 오른쪽 위 ✕로 닫는다
@@ -75,7 +75,6 @@ body.touch .stick.on { opacity: 0.9; }
 .tbtn[data-act="hookset"] { background: #b8902ae6; }
 .tbtn[data-act="lower"] { background: #4f6a7ae6; }
 .tbtn[data-act="interact"] { background: #8a6a3fe6; }
-
 /* ── 조과 카드: 오른쪽, 화면 높이에 맞춰 ── */
 body.touch .catch .catch-card { width: min(320px, 60vw); max-height: calc(100dvh - 16px - var(--sat) - var(--sab)); overflow-y: auto; overscroll-behavior: contain; }
 body.touch .catch-card .row .btn { min-height: 48px; }
@@ -107,6 +106,76 @@ body.touch .start-card .btn.primary { min-height: 52px; }
   body.touch .fishery-preview { height: 54px; }
 }
 
+/* ── 휴대폰: 가방·상점 등 창 안쪽을 PC 크기에서 한 단계 줄인다 ──
+   패널은 이미 화면을 꽉 채우지만, 안의 칸·그림·글자·버튼이 PC 값 그대로라
+   창이 너무 크게 보였다. 가로 휴대폰(높이 ~400px)에서 한 화면에 더 많이 보이게 한다. */
+@media (max-height: 600px), (max-width: 760px) {
+  body.touch .modal .panel:not(.small) { padding: calc(8px + var(--sat)) calc(12px + var(--sar)) calc(10px + var(--sab)) calc(12px + var(--sal)); }
+  body.touch .modal .panel h2 { font-size: 16px; line-height: 1.3; margin-bottom: 6px; }
+  body.touch .modal .panel h3 { margin: 12px 0 6px; font-size: 13px; }
+  body.touch .panel .kicker { font-size: 11px; }
+  body.touch .panel .quality-guide { margin-bottom: 8px; }
+
+  /* 탭·필터·버튼: 손가락에 닿을 만큼(36px)만 키우고 PC의 44px 높이는 쓰지 않는다 */
+  body.touch .panel :is(.btn, .choice, .platform-choice, .hub-tile) { min-height: 36px; }
+  body.touch .panel .btn { padding: 6px 12px; font-size: 12px; }
+  body.touch .panel .btn.small { padding: 5px 9px; font-size: 12px; }
+  body.touch .panel .record-tabs { gap: 4px; margin-bottom: 8px; }
+  body.touch .panel-x button { width: 40px; height: 40px; }
+
+  /* 상점 탭·필터: 줄바꿈 대신 가로 스크롤 한 줄씩 (세로 공간을 상품에 쓴다) */
+  body.touch #hud .quality-shop .quality-guide { display: none; }
+  body.touch #hud .quality-shop .record-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+  body.touch #hud .quality-shop .record-tabs .btn { flex: 0 0 auto; white-space: nowrap; }
+  body.touch #hud .quality-shop .shop-filters { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  body.touch #hud .quality-shop .shop-filters .record-tabs { flex: 0 0 auto; overflow: visible; }
+  body.touch #hud .quality-shop .shop-filters > .btn { flex: 0 0 auto; white-space: nowrap; }
+  body.touch #hud .quality-shop .shop-filters > small { flex: 0 0 auto; padding-left: 8px; white-space: nowrap; }
+
+  /* 가방: 칸 72 → 52px, 상세 260 → 200px. 상세는 목록을 내려도 따라온다 */
+  body.touch #hud .inventory-panel .inv-layout { grid-template-columns: minmax(0, 1fr) 200px; gap: 10px; }
+  body.touch #hud .inventory-panel .slot-grid { grid-template-columns: repeat(auto-fill, 52px); gap: 3px; padding: 6px; }
+  body.touch #hud .inventory-panel .slot-grid .slot { width: 52px; height: 52px; padding: 3px; }
+  body.touch #hud .inventory-panel .slot-grid .slot .slot-art { width: 40px; height: 40px; }
+  body.touch #hud .inventory-panel .slot .count { font-size: 11px; }
+  body.touch #hud .item-detail { position: sticky; top: 0; gap: 3px; padding: 10px; font-size: 11px; }
+  body.touch #hud .item-detail .slot-art.big { width: 72px; height: 72px; padding: 6px; margin-bottom: 2px; }
+  body.touch #hud .item-detail .item-name { font-size: 13px; }
+  body.touch #hud .item-detail p { line-height: 1.5; }
+  body.touch #hud .item-detail .row { gap: 4px; margin-top: 6px; }
+
+  /* 상점: 그림 96/84/128 → 60/56/80px, 카드 안 여백도 줄인다 */
+  body.touch #hud .quality-shop .shop-saving { gap: 6px; padding: 8px 10px; margin-bottom: 8px; }
+  body.touch #hud .quality-shop .shop-filters { gap: 5px; padding: 4px 0 8px; margin-bottom: 8px; }
+  body.touch #hud .shop-card { grid-template-columns: 60px 1fr; gap: 4px 10px; padding: 8px; }
+  body.touch #hud .shop-card .shop-art .slot { width: 60px; height: 60px; }
+  body.touch #hud .shop-card .shop-art .slot .slot-art { width: 48px; height: 48px; }
+  body.touch #hud .shop-art .lock { width: 24px; height: 24px; }
+  body.touch #hud .quality-shop :is(.tackle-card, .shop-tile-open) { grid-template-columns: 60px minmax(0, 1fr); gap: 10px; padding: 8px; }
+  body.touch #hud .quality-shop .shop-tile { padding: 0; }
+  body.touch #hud .quality-shop :is(.tackle-card-art, .tackle-hero-art) { width: 60px; height: 60px; }
+  body.touch #hud .quality-shop .tackle-card-art .slot-art { width: 48px; height: 48px; }
+  body.touch #hud .quality-shop .tackle-hero { grid-template-columns: 80px minmax(0, 1fr); gap: 12px; }
+  body.touch #hud .quality-shop .tackle-hero-art { width: 80px; height: 80px; }
+  body.touch #hud .quality-shop .tackle-hero-art .slot-art { width: 64px; height: 64px; }
+  body.touch #hud .quality-shop .tackle-group, body.touch #hud .quality-shop .tackle-detail { padding: 8px; }
+  body.touch #hud .quality-shop .tackle-row { gap: 8px; padding: 6px 8px; }
+  body.touch #hud .quality-shop .tackle-actions .btn { min-height: 32px; }
+  body.touch #hud .quality-shop .shop-brand-items { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 6px; }
+  body.touch #hud .quality-shop .shop-list { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 6px; }
+  body.touch #hud .quality-shop .shop-specs { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 4px; margin-top: 10px; }
+  body.touch #hud .quality-shop .shop-detail-buy { margin-top: 10px; padding-top: 8px; }
+
+  /* 도감 카드 */
+  body.touch .species-card .fish-icon { height: 56px; margin: 6px 0; }
+}
+
+/* 좁은 화면(세로 휴대폰·작은 창): 가방은 한 줄로 쌓는다 */
+@media (max-width: 620px) {
+  body.touch #hud .inventory-panel .inv-layout { grid-template-columns: 1fr; }
+  body.touch #hud .item-detail { position: static; }
+}
+
 /* 가로 휴대폰: 메뉴 칸은 4열 그대로 (세로 좁은 화면만 2열) */
 @media (max-height: 600px) and (orientation: landscape) {
   body.touch .hub-grid { grid-template-columns: repeat(4, 1fr); }
@@ -114,6 +183,10 @@ body.touch .start-card .btn.primary { min-height: 52px; }
 
 /* 아주 낮은 가로 화면 (작은 휴대폰): 버튼·카드를 조금 줄인다 */
 @media (max-height: 400px) {
+  body.touch .start .start-card { padding: 14px 20px; }
+  body.touch .start-card h1 { font-size: 26px; margin: 2px 0 4px; }
+  body.touch .start-card .lead { margin-bottom: 10px; }
+  body.touch .start-card .tip { display: none; }
   body.touch .tbtn.main { width: 82px; height: 82px; font-size: 15px; }
   body.touch .tbtn.alt { right: 92px; width: 60px; height: 60px; }
   body.touch .tchips { bottom: 92px; }
@@ -127,7 +200,21 @@ body.touch .start-card .btn.primary { min-height: 52px; }
   body.touch .catch-card .row { margin-top: 10px; }
 }
 
-/* 세로로 들면: 휴대폰은 가로로 돌려 달라고 안내 (태블릿 세로는 넓어서 그대로 플레이) */
-@media (orientation: portrait) and (min-width: 700px) {
-  body.touch .rotate-note { display: none; }
+/* ── 세로 휴대폰: 가로·세로 모두 플레이할 수 있다 (태블릿 세로는 넓어서 위 배치 그대로) ──
+   아래쪽에 핫바 한 줄을 두고, 그 위에 조이스틱·상황 버튼, 더 위에 파이팅 막대를 쌓아 서로 겹치지 않게 한다. */
+@media (orientation: portrait) and (max-width: 700px) {
+  body.touch .stick { left: calc(72px + var(--sal)); top: calc(100% - 170px - var(--sab)); }
+  .touch-buttons { bottom: calc(66px + var(--sab, 0px)); }
+  body.touch #hud .fight { bottom: calc(232px + var(--sab)); width: min(420px, 88vw); }
+  body.touch .power { top: calc(50% + 18px); }
+
+  /* 위쪽: 살림망 게이지(왼쪽)·시계/메뉴(오른쪽) 아래로 알림과 채팅을 내린다 */
+  body.touch .tour-pill { top: calc(70px + var(--sat)); }
+  body.touch .toasts { top: calc(112px + var(--sat)); }
+  body.touch .toast { max-width: 86vw; }
+  body.touch .lakeside-chat { top: calc(70px + var(--sat)); width: min(300px, 62vw); }
+  body.touch .place { max-width: calc(100vw - 16px - var(--sal) - var(--sar)); }
+
+  /* 조과 카드: 화면 너비에 맞춰 가운데 */
+  body.touch .catch .catch-card { width: min(340px, calc(100vw - 24px)); }
 }

@@ -823,7 +823,7 @@ export function pausePanel(c: PanelCtx) {
     <li><kbd>WASD</kbd> 걷기 · <kbd>E</kbd> 대 들기 / 거치 · <kbd>1</kbd>~<kbd>3</kbd> 낚싯대 · <kbd>F</kbd> 회수</li>
     <li>낚시점·어시장 계산대 앞에서 <kbd>E</kbd> (또는 <kbd>B</kbd> 낚시점 · <kbd>N</kbd> 어시장)</li>
     <li><kbd>좌클릭 길게 → 놓기</kbd> 앞치기 · <kbd>좌·우클릭</kbd> 대 들기(챔질) · <kbd>R</kbd> 채비 걷기</li>
-    <li>걸면 <kbd>좌클릭</kbd> 대 세우기 · <kbd>우클릭</kbd> 대 숙이기 · <kbd>Z</kbd> 망원</li>
+    <li>걸면 <kbd>좌클릭</kbd> 대 세우기 · <kbd>우클릭</kbd> 대 숙이기 · <kbd>Z</kbd> 확대</li>
   </ul></details>
   <div class="row"><button class="btn" data-act="menu" data-id="settings">설정 <kbd>O</kbd></button></div>
 </div>`;

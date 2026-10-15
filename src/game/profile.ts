@@ -1,10 +1,10 @@
-import { BAIT_IDS, BAIT_PACKS, FLOATS, HOOKS, INGREDIENTS, LINES, MAX_DEPLOYED_RODS, RODS, SPECIES, type BaitId, type IngredientId, type SpeciesId } from './data';
+import { BAIT_IDS, BAIT_PACKS, FLOATS, HOOKS, INGREDIENTS, LINES, RODS, SPECIES, type BaitId, type IngredientId, type SpeciesId } from './data';
 import { ACHIEVEMENTS, dailyQuests, fishValue, today, type QuestKind, type QuestState } from './economy';
 import { KEEPNETS, NETS, SPECIES_RULES } from './items';
 import { SKILL_IDS, SKILL_MAX, type SkillId } from './skills';
 import type { Catch } from './fishing';
 import { BAIT_PRODUCTS, LEGACY_CHUM_PRODUCTS, baitProduct } from './realCatalog';
-import { ACTIVE_FISHERY, FISHERIES, type FisheryId } from './fisheries';
+import { ACTIVE_FISHERY, type FisheryId } from './fisheries';
 import { personalGoals } from './personalGoals';
 import { createFeedBlend, FEED_MATERIALS, type FeedBlend, type FeedDraft } from './feedMixing';
 
@@ -66,7 +66,14 @@ export class PlayerProgress {
   private goalCache: ReturnType<typeof personalGoals> | null = null;
   constructor(private readonly repository: ProfileRepository = new LocalProfileRepository()) {
     this.data = initial();
-    const raw = repository.load();
+    this.reload(repository.load());
+  }
+  /** 저장된 진행을 이 인스턴스에 다시 불러온다. 로그인 뒤 서버 저장을 받을 때도 같은 객체를 그대로 쓴다. raw가 비었거나 깨졌으면 새 진행이 된다. */
+  reload(raw: unknown) {
+    Object.assign(this.data, initial());
+    for (const id of Object.keys(this.best)) delete this.best[id];
+    this.keepnet.length = 0;
+    this.goalCache = null;
     if (raw && typeof raw === 'object' && 'version' in raw && raw.version === 1) {
       const s = raw as Partial<PlayerSave>;
       const d = this.data;
@@ -138,13 +145,7 @@ export class PlayerProgress {
           seen.add(c.id); return true;
         });
       }
-      if (Array.isArray(s.placed)) d.placed = FISHERIES.flatMap(f => {
-        const seen = new Set<string>();
-        return s.placed!.filter(p => {
-          if (!p || typeof p.slotId !== 'string' || (p.fisheryId ?? 'willow') !== f.id || seen.has(p.slotId)) return false;
-          seen.add(p.slotId); return true;
-        }).slice(0, MAX_DEPLOYED_RODS).map(p => ({ slotId: p.slotId, ownerId: d.playerId, rig: this.normalizeRig(p.rig), fisheryId: f.id }));
-      });
+      // 설치한 낚싯대(placed)는 불러오지 않는다. 공유 맵이라 접속이 끝나면 대는 가방으로 돌아온다.
     }
     for (const c of this.data.catches) {
       this.best[c.species] = Math.max(this.best[c.species] ?? 0, c.cm);
