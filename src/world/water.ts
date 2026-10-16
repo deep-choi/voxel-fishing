@@ -96,6 +96,7 @@ const WaterShader = {
       uDeep: { value: new THREE.Color('#163330') },
       uShallow: { value: new THREE.Color('#2f5a4a') },
       uRip: { value: Array.from({ length: MAX_RIPPLES }, () => new THREE.Vector4(0, 0, -100, 0)) },
+      uRipCount: { value: 0 },
       uWind: { value: 1 },
       uReflection: { value: 1 },
       uGlint: { value: 1 },
@@ -129,6 +130,7 @@ const WaterShader = {
     uniform vec3 uDeep;
     uniform vec3 uShallow;
     uniform vec4 uRip[${MAX_RIPPLES}];
+    uniform int uRipCount;
     uniform float uWind;
     uniform float uReflection;
     uniform float uGlint;
@@ -153,6 +155,7 @@ const WaterShader = {
 
       // 파문 고리
       for (int i = 0; i < ${MAX_RIPPLES}; i++) {
+        if (i >= uRipCount) break;
         vec4 r = uRip[i];
         float age = uTime - r.z;
         if (r.w <= 0.0 || age < 0.0 || age > 7.0) continue;
@@ -197,6 +200,7 @@ export class Water {
   readonly mesh: Reflector;
   private readonly uniforms: Record<string, THREE.IUniform>;
   private ripIndex = 0;
+  private readonly ripples = Array.from({ length: MAX_RIPPLES }, () => new THREE.Vector4(0, 0, -100, 0));
 
   constructor() {
     const geo = new THREE.PlaneGeometry(1400, 1400);
@@ -240,8 +244,19 @@ export class Water {
 
   /** 파문 하나 추가 (세기 0~1) */
   ripple(x: number, z: number, strength: number) {
-    const v = this.uniforms.uRip.value[this.ripIndex] as THREE.Vector4;
+    const v = this.ripples[this.ripIndex];
     v.set(x, z, shared.uTime.value, strength);
     this.ripIndex = (this.ripIndex + 1) % MAX_RIPPLES;
+  }
+
+  /** 살아 있는 파문만 GPU에 보낸다. 수면의 픽셀마다 빈 슬롯 16개를 검사하지 않는다. */
+  update(t: number) {
+    let count = 0;
+    const packed = this.uniforms.uRip.value as THREE.Vector4[];
+    for (const ripple of this.ripples) {
+      const age = t - ripple.z;
+      if (ripple.w > 0 && age >= 0 && age <= 7) packed[count++].copy(ripple);
+    }
+    this.uniforms.uRipCount.value = count;
   }
 }

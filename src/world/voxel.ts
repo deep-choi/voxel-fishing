@@ -79,14 +79,24 @@ function material(): THREE.MeshLambertMaterial {
   return mat;
 }
 
-function buildMesh(blocks: Block[]): THREE.InstancedMesh {
+function buildMesh(blocks: Block[], mat: THREE.MeshLambertMaterial, faces = 63): THREE.InstancedMesh {
   const geo = new THREE.BoxGeometry(1, 1, 1);
   geo.translate(0, 0.5, 0);
+  if (faces !== 63) {
+    const index = geo.index!.array;
+    const visible: number[] = [];
+    // BoxGeometry 면 순서: +x, -x, +y, -y, +z, -z.
+    for (let face = 0; face < 6; face++) {
+      if (faces & (1 << face)) visible.push(...index.slice(face * 6, face * 6 + 6));
+    }
+    geo.setIndex(visible);
+    geo.clearGroups();
+  }
   const side = new Float32Array(blocks.length * 3);
   const info = new Float32Array(blocks.length * 2);
   geo.setAttribute('aSide', new THREE.InstancedBufferAttribute(side, 3));
   geo.setAttribute('aInfo', new THREE.InstancedBufferAttribute(info, 2));
-  const mesh = new THREE.InstancedMesh(geo, material(), blocks.length);
+  const mesh = new THREE.InstancedMesh(geo, mat, blocks.length);
   const m = new THREE.Matrix4();
   blocks.forEach((b, i) => {
     m.makeScale(b.size, Math.max(0.01, b.top - b.bottom), b.size);
@@ -99,6 +109,30 @@ function buildMesh(blocks: Block[]): THREE.InstancedMesh {
   mesh.computeBoundingSphere();
   mesh.receiveShadow = true;
   return mesh;
+}
+
+/** 이웃 기둥이 완전히 덮은 옆면만 빼고 같은 면 조합끼리 인스턴싱한다.
+ * 위·아래 면과 크기가 다른 격자 경계는 유지한다. 공간 청크보다 호출 수가 적다. */
+function addTerrain(group: THREE.Group, blocks: Block[]) {
+  const cells = new Map(blocks.map(b => [`${b.size},${b.x},${b.z}`, b]));
+  const batches = new Map<number, Block[]>();
+  for (const block of blocks) {
+    let faces = 63;
+    for (const [face, dx, dz] of [[0, 1, 0], [1, -1, 0], [4, 0, 1], [5, 0, -1]]) {
+      const neighbor = cells.get(`${block.size},${block.x + dx * block.size},${block.z + dz * block.size}`);
+      if (neighbor && neighbor.top >= block.top && neighbor.bottom <= block.bottom) faces &= ~(1 << face);
+    }
+    const batch = batches.get(faces);
+    if (batch) batch.push(block);
+    else batches.set(faces, [block]);
+  }
+  const mat = material();
+  for (const [faces, batch] of batches) {
+    const mesh = buildMesh(batch, mat, faces);
+    mesh.updateMatrix();
+    mesh.matrixAutoUpdate = false;
+    group.add(mesh);
+  }
 }
 
 /** 블록 높이로 맞춘 지형 높이 */
@@ -160,8 +194,7 @@ export function createVoxelWorld(): THREE.Group {
       }
     }
   });
-  const terrain = buildMesh(blocks);
-  group.add(terrain);
+  addTerrain(group, blocks);
 
   // 나무: 통나무 기둥 + 잎 덩어리 두 층
   const trees: Block[] = [];
@@ -182,7 +215,7 @@ export function createVoxelWorld(): THREE.Group {
       trees.push({ x: tx, z: tz, bottom: base + h, top: base + h + 2, size: ACTIVE_FISHERY.id === 'moon' ? 2 : 3, grid: 1, topColor: leaf, sideColor: leaf });
     }
   }
-  const treeMesh = buildMesh(trees);
+  const treeMesh = buildMesh(trees, material());
   treeMesh.castShadow = true;
   group.add(treeMesh);
   return group;

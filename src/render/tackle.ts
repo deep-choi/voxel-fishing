@@ -677,6 +677,7 @@ export class Splashes {
   private readonly vel: Float32Array;
   private readonly life: Float32Array;
   private next = 0;
+  private active = 0;
 
   constructor() {
     this.pos = new Float32Array(this.N * 3).fill(-999);
@@ -704,6 +705,7 @@ export class Splashes {
     this.points = new THREE.Points(geo, mat);
     this.points.frustumCulled = false;
     this.points.renderOrder = 6;
+    this.points.visible = false;
   }
 
   burst(x: number, z: number, size: number) {
@@ -711,15 +713,18 @@ export class Splashes {
     for (let i = 0; i < n; i++) {
       const k = this.next;
       this.next = (this.next + 1) % this.N;
+      if (this.life[k] <= 0) this.active++;
       const a = Math.random() * Math.PI * 2;
       const sp = (0.3 + Math.random() * 1.4) * (0.5 + size * 0.6);
       this.pos.set([x + Math.cos(a) * 0.05 * size, WATER_Y + 0.02, z + Math.sin(a) * 0.05 * size], k * 3);
       this.vel.set([Math.cos(a) * sp * 0.5, (1.2 + Math.random() * 2.2) * (0.5 + size * 0.5), Math.sin(a) * sp * 0.5], k * 3);
       this.life[k] = 1;
     }
+    this.points.visible = this.active > 0;
   }
 
   update(dt: number) {
+    if (this.active === 0) return;
     for (let k = 0; k < this.N; k++) {
       if (this.life[k] <= 0) continue;
       this.vel[k * 3 + 1] -= 9.8 * dt;
@@ -728,9 +733,11 @@ export class Splashes {
       this.pos[k * 3 + 2] += this.vel[k * 3 + 2] * dt;
       if (this.pos[k * 3 + 1] < WATER_Y) {
         this.life[k] = 0;
+        this.active--;
         this.pos[k * 3 + 1] = -999;
       }
     }
     this.points.geometry.attributes.position.needsUpdate = true;
+    this.points.visible = this.active > 0;
   }
 }

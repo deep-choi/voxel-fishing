@@ -56,6 +56,8 @@ export class Platforms {
   private readonly rnd = mulberry(ACTIVE_FISHERY.terrain.seed + 77);
   /** 밤에 은은하게 켜지는 등 */
   private readonly lampMat = new THREE.MeshLambertMaterial({ color: '#ffe2a8', emissive: '#ffb85a', emissiveIntensity: 0.9 });
+  private readonly markers: THREE.InstancedMesh;
+  private readonly markerOccupied = new Map<string, boolean>();
 
   constructor() {
     this.group.name = `${ACTIVE_FISHERY.name} 좌대 낚시터`;
@@ -107,6 +109,18 @@ export class Platforms {
     this.stall('market', '어시장', 5.4, oz, -1, '#8a4b3f');
     this.plaza(oz);
     this.build();
+    // 72개 자리 표시는 모양·발광이 같다. 색만 인스턴스별로 바꿔 한 번에 그린다.
+    this.markers = new THREE.InstancedMesh(this.cube,
+      new THREE.MeshLambertMaterial({ emissive: '#40351a', emissiveIntensity: 0.2 }), this.slots.length);
+    for (const [i, slot] of this.slots.entries()) {
+      slot.marker.updateMatrix();
+      this.markers.setMatrixAt(i, slot.marker.matrix);
+      this.markers.setColorAt(i, (slot.marker.material as THREE.MeshLambertMaterial).color);
+      slot.marker.removeFromParent();
+    }
+    this.markers.castShadow = this.markers.receiveShadow = true;
+    this.markers.computeBoundingSphere();
+    this.group.add(this.markers);
     // 입장하면 출발 지점(다리 입구의 관리동 마당)에서 시작한다. 정면으로 좌대 다리, 양옆에 낚시점·어시장
     PLAYER.x = this.office.x;
     PLAYER.z = this.office.z + 2.2;
@@ -613,6 +627,21 @@ export class Platforms {
   /** 해 질수록 등이 켜진다 (0 낮 ~ 1 밤) */
   setLights(dark: number) {
     this.lampMat.emissiveIntensity = 0.05 + dark * 1.5;
+  }
+
+  /** 거치 상태가 바뀐 표시만 갱신하고 GPU에는 한 번만 보낸다. */
+  updateMarkers(occupied: { has(id: string): boolean }) {
+    let changed = false;
+    for (const [i, slot] of this.slots.entries()) {
+      const on = occupied.has(slot.id);
+      if (this.markerOccupied.get(slot.id) === on) continue;
+      this.markerOccupied.set(slot.id, on);
+      const mat = slot.marker.material as THREE.MeshLambertMaterial;
+      mat.color.set(on ? '#83b8a4' : '#eac67d');
+      this.markers.setColorAt(i, mat.color);
+      changed = true;
+    }
+    if (changed) this.markers.instanceColor!.needsUpdate = true;
   }
 
   // ── 판정 ─────────────────────────────────

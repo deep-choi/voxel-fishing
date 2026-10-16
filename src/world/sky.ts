@@ -79,8 +79,10 @@ export function setupSky(scene: THREE.Scene, renderer: THREE.WebGLRenderer) {
     },
     /** 그림자 범위를 플레이어 주변으로 */
     follow(center: THREE.Vector3) {
+      if (sun.target.position.equals(center)) return false;
       sun.target.position.copy(center);
       sun.position.copy(center).addScaledVector(sunDir, 120);
+      return true;
     },
     update(t: number) {
       sky.material.uniforms.time.value = t;

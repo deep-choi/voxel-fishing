@@ -8,6 +8,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
+    "test:render": "node scripts/check-render-performance.mjs",
     "test:feed": "node scripts/check-feed-mixing.mjs",
     "test:hooks": "node scripts/check-hook-catalog.mjs",
     "test:save": "node scripts/check-save-sync.mjs && node scripts/check-profile-sync.mjs",

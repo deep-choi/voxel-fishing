@@ -25,6 +25,7 @@ import { ProfileSync } from './game/profileSync';
 import { FishingGrounds } from './game/grounds';
 import { VoxelFishModel as FishModel } from './render/voxelFishModel';
 import { createPixelPass, type PixelLook } from './render/pixelPass';
+import { FrameLimit } from './render/frameLimit';
 import { Float, FishingLine, Hook, Rod, RodHands, Splashes, rodRestElevation, type RodPose } from './render/tackle';
 import { Hud, type MenuModal } from './ui/hud';
 import { loadSettings, saveSettings, touchEnabled } from './ui/settings';
@@ -77,6 +78,8 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.95;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
+renderer.shadowMap.autoUpdate = false;
+renderer.shadowMap.needsUpdate = true;
 stage.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
@@ -1268,7 +1271,9 @@ function updateWorld(dt: number) {
 
 const timer = new THREE.Timer();
 timer.connect(document);
+const frameLimit = new FrameLimit();
 let simTime = 0;
+let hadDynamicShadows = false;
 
 function frame(dt: number, render = true) {
   const paused = !hud.started || hud.modal === 'pause';
@@ -1316,11 +1321,17 @@ function frame(dt: number, render = true) {
   splashes.update(dt);
   mist.update(t);
   sky.update(t);
-  sky.follow(eye);
+  const shadowMoved = sky.follow(eye);
+  // 낚싯대·고기도 그림자를 드리운다. 사라진 다음 한 번 더 구워 잔상을 지운다.
+  const dynamicShadows = style !== 'voxel' || mounted.size > 0 || remotePlayers.group.children.length > 0
+    || fishModel !== null || landing !== null || heldFish !== null;
+  renderer.shadowMap.needsUpdate ||= shadowMoved || dynamicShadows || hadDynamicShadows;
+  hadDynamicShadows = dynamicShadows;
   const audibleFight = hud.modal === 'none' && active !== null && game.phase === 'fighting';
   const f = audibleFight ? game.fish : null;
   sound.update(dt, audibleFight ? game.tension / game.line.strength : 0, f?.behavior === 'shake' ? 1 : 0, f && f.pos.y > -1.2 ? Math.max(0, f.vel.length() - 0.8) / 2.5 : 0);
   if (!render) return;
+  water.update(t);
   composer.render();
   const pipOn = renderPip();
   const near = platforms.nearestSlot(PLAYER.x, PLAYER.z);
@@ -1348,19 +1359,27 @@ function frame(dt: number, render = true) {
   hud.setRodSlots(Array.from(mounted.values(), (m, i) => ({ slotId: m.slot.id, number: here ? m.slot.number : i + 1, rodId: m.game.rodId, name: m.game.rod.name, platform: m.slot.platform,
     state: m === active ? parking ? '거치 중' : '손에 듦' : '거치됨',
     active: m === active })));
-  for (const s of platforms.slots) {
-    const mat = s.marker.material as THREE.MeshLambertMaterial;
-    // 받침대 표시: 거치 초록 / 빈자리 노랑 (입질·걸림은 표시하지 않는다)
-    mat.color.set(mounted.has(s.id) ? '#83b8a4' : '#eac67d');
-    mat.emissiveIntensity = 0.2;
-  }
+  platforms.updateMarkers(mounted);
   hud.update(pipOn);
 }
 
-renderer.setAnimationLoop(() => {
+function animate(now: number) {
+  if (document.hidden || !frameLimit.ready(now)) return;
   timer.update();
   frame(Math.min(0.05, timer.getDelta()));
-});
+}
+function syncAnimation() {
+  frameLimit.reset();
+  timer.reset();
+  if (document.hidden) {
+    input.primary = input.lift = input.hookset = input.retrieve = false;
+    walk.w = walk.a = walk.s = walk.d = false;
+  }
+  renderer.setAnimationLoop(document.hidden ? null : animate);
+}
+document.addEventListener('visibilitychange', syncAnimation);
+canvas.addEventListener('webglcontextrestored', () => { renderer.shadowMap.needsUpdate = true; });
+syncAnimation();
 
 // 디버그·자동 테스트용 손잡이
 Object.assign(window, {

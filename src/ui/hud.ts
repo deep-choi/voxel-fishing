@@ -73,6 +73,7 @@ export class Hud {
   chatting = false;
   private chatFolded = false;
   private touchHints: boolean | null = null;
+  private nextTrackersAt = 0;
   private readonly el: Record<string, HTMLElement> = {};
   private last: Record<string, string> = {};
   private platforms: P.PlatformStatus[] = [];
@@ -556,7 +557,15 @@ export class Hud {
     this.set('env', this.el.env, `<span class="env-icon" title="${WEATHER[w].name}">${itemIcon(env.night && w === 'clear' ? 'moon' : w)}</span><b>${env.clock}</b>`);
     this.el.night.style.opacity = String((1 - env.daylight) * 0.42);
     this.el.pip.classList.toggle('on', pipOn && this.started);
-    if (this.started) { this.updateBottom(); this.updateTrackers(); }
+    if (this.started) {
+      this.updateBottom();
+      // 업적은 전체 조과를 검사한다. 장력계·캐스팅 입력과 분리해 초당 4회만 계산한다.
+      const now = performance.now();
+      if (now >= this.nextTrackersAt) {
+        this.nextTrackersAt = now + 250;
+        this.updateTrackers();
+      }
+    }
 
     const power = this.el.power;
     power.classList.toggle('on', g.phase === 'charging');
