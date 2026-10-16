@@ -285,7 +285,7 @@ export class Fishing {
     }
     if (this.progress?.consumeBait && !this.progress.consumeBait(this.bait, this.baitProduct?.id)) {
       this.phase = 'ready';
-      this.emit({ type: 'toast', text: '미끼가 없어요 · 낚시점에서 살 수 있어요', tone: 'bad' });
+      this.emit({ type: 'toast', text: '미끼가 없어요', tone: 'bad' });
       return;
     }
     this.phase = 'casting';
@@ -513,6 +513,12 @@ export class Fishing {
     // 챔질과 자연 입걸림 모두 이루어지지 않으면 고기가 떠난다.
     this.bite = null;
     this.biteCooldown = this.fastTest ? 6 : rand(15, 35);
+  }
+
+  /** 거치한 대의 챔질: 손에 들지 않아도 대를 들어 올려 고기를 건다. 걸렸으면 true */
+  strike() {
+    this.doHookset();
+    return this.phase === 'fighting';
   }
 
   /** 챔질은 대를 들어 올리는 동작이다. 고기가 걸리지 않으면 채비가 그대로 물 밖으로 들려 나온다 */

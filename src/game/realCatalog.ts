@@ -93,6 +93,8 @@ export const BAIT_PRODUCTS: BaitProduct[] = [
 /** 예전 던지는 떡밥 재고를 바늘용으로 옮길 때만 쓰는 저장 ID. */
 export const LEGACY_CHUM_PRODUCTS = new Set(['kw-chum', 'toco-11', ...Array.from({ length: 5 }, (_, i) => `house-chum-${i + 1}`)]);
 BAIT_PRODUCTS.push(...createHouseBaits());
+// 한 번에 많이 사도록 포장 단위를 5배로 키운다 (회당 가격은 그대로)
+for (const p of BAIT_PRODUCTS) { p.count *= 5; p.price *= 5; }
 for (const product of BAIT_PRODUCTS) applyFictionalProductName('bait', product);
 export const baitProduct = (id?: string) => BAIT_PRODUCTS.find(p => p.id === id);
 for (const p of BAIT_PRODUCTS) if (p.brand && p.source && p.sourceKind && p.facts) {

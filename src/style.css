@@ -609,7 +609,6 @@ body.voxel {
 .map-dot { display: grid; place-items: center; padding: 4px; background: #496b6544; border: 1px solid #a0b9a744; border-radius: 2px; font-size: 10px; }
 .map-dot.current { border-color: var(--accent); color: var(--accent); background: #e9c78222; }
 .map-dot.occupied { box-shadow: inset 0 -2px #83b8a4; }
-.map-dot.biting { color: #ffbc75; animation: bite-pulse 1s infinite alternate; }
 .map-legend { font-size: 10px; color: var(--dim); }
 .tackle { right: 26px; bottom: 26px; border-radius: 8px; border: 1px solid var(--line); font-size: 11px; min-width: 170px; padding: 14px; }
 .pip { width: 145px; height: 190px; right: 26px; top: 26px; border-radius: 6px; }
@@ -633,7 +632,6 @@ body.voxel {
 .rod-slot > kbd { margin: 0; font-size: 11px; color: var(--accent); }
 .rod-slot small { display: block; font-size: 10px; color: var(--dim); margin-top: 3px; }
 .rod-slot.held { border-color: var(--accent); }
-.rod-slot.biting { animation: bite-pulse 1s infinite alternate; }
 .rod-slot:disabled { opacity: 0.5; cursor: default; }
 .product-note { display: block; margin-top: 5px; color: #ada88e; font-size: 11px; line-height: 1.5; }
 .product-note a { color: #8dccae; text-decoration: underline; }

@@ -28,4 +28,5 @@ export function saveSettings(s: Settings) {
   try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* 저장 못 해도 이번 세션엔 적용된다 */ }
 }
 /** 터치 조작을 보여 줄지: 자동이면 손가락 입력 기기에서만 */
-export const touchEnabled = (s: Settings) => s.touch === 'on' || (s.touch === 'auto' && matchMedia('(pointer: coarse)').matches);
+/** 자동: 터치 기기이거나, PC에서 창을 휴대폰 크기로 줄였을 때(크롬 기기 모드 포함) 모바일 화면으로 */
+export const touchEnabled = (s: Settings) => s.touch === 'on' || (s.touch === 'auto' && matchMedia('(pointer: coarse), (max-width: 900px), (max-height: 480px)').matches);

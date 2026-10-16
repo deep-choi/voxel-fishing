@@ -43,7 +43,7 @@ try {
   let saved;
   const repository = { load: () => saved, save: data => { saved = structuredClone(data); } };
   const player = new PlayerProgress(repository);
-  const ui = { shopTab: 'hook', shopModel: null, shopBrand: null, shopQuality: 0, shopAffordable: false };
+  const ui = { shopTab: 'hook', shopModel: null, shopBrand: null };
   const context = { player, ui };
   const cardIds = html => [...html.matchAll(/data-act="shop-model" data-id="hook:([^"]+)"/g)].map(match => match[1]);
   const list = shopPanel(context);
@@ -64,12 +64,8 @@ try {
     assert.deepEqual(new Set(cardIds(shopPanel(context))), new Set(expected), 'brand filter must select models');
   }
   ui.shopBrand = null;
-  for (const tier of [1, 2, 3, 4, 5]) {
-    ui.shopQuality = tier;
-    const rarities = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
-    const expected = [...models].filter(([, variants]) => variants[0].rarity === rarities[tier - 1]).map(([id]) => id);
-    assert.deepEqual(new Set(cardIds(shopPanel(context))), new Set(expected), 'quality filter must select complete models');
-  }
+  // 품질은 필터가 아니라 카드의 별로 보여 준다: 모든 모델 카드에 별이 하나씩 있다
+  assert.equal([...shopPanel(context).matchAll(/class="item-stars"/g)].length, models.size, 'every model card shows quality stars');
 
   // Buying sizes is independent, and both old and new IDs survive a save/reload with the rig intact.
   player.data.coins = 100000;

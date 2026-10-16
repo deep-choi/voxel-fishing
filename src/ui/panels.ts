@@ -19,7 +19,7 @@ import { lineMaterial } from '../game/lineMaterials';
 import { getHookTraits } from '../game/hookTraits';
 import { hookValue, lineValue, type TackleValue } from './tackleValue';
 import './sizeRanks.css';
-import { itemQuality, QUALITY_LABELS } from '../game/itemQuality';
+import { itemQuality } from '../game/itemQuality';
 import './shopQuality.css';
 import { createFeedBlend, FEED_MATERIALS, type FeedDraft, type FeedMaterial } from '../game/feedMixing';
 import './crafting.css';
@@ -39,13 +39,13 @@ export type ShopTab = 'bait' | 'rod' | 'line' | 'float' | 'hook' | 'net' | 'repa
 /** 가방 분류 탭 */
 export type InvTab = 'all' | 'rod' | 'tackle' | 'bait' | 'gear';
 export type RigStep = 'rod' | 'line' | 'float' | 'depth' | 'hook' | 'bait';
-export interface PlatformStatus { id: number; name: string; rods: number; bites: number }
-export interface RodStatus { slotId: string; number: number; rodId: string; name: string; platform: number; state: string; active: boolean; biting: boolean }
+export interface PlatformStatus { id: number; name: string; rods: number }
+export interface RodStatus { slotId: string; number: number; rodId: string; name: string; platform: number; state: string; active: boolean }
 export interface UiState {
   inventoryTab: InvTab; invSelected: string | null;
   feedDraft: FeedDraft; feedFilter: 'all' | 'fish' | 'gluten' | 'grain' | 'flavor'; feedView: 'list' | 'mix';
-  shopTab: ShopTab; shopModel: string | null; shopBrand: string | null; shopQuality: number; shopAffordable: boolean; rigStep: RigStep;
-  /** 채비 창에서 고른 대: 자리 id 또는 'default'(새로 꺼낼 대). null이면 손에 든 대 */
+  shopTab: ShopTab; shopModel: string | null; shopBrand: string | null; rigStep: RigStep;
+  /** 채비 창에서 고른 대: 자리 id 또는 'empty:N'(N번 빈 자리에 꺼낼 대). null이면 손에 든 대 */
   rigTarget: string | null;
   recordSpecies: SpeciesId; weekly: boolean;
   questTab: 'personal' | 'daily' | 'achieve';
@@ -65,7 +65,12 @@ export interface PanelCtx {
 const rarityName = (r: Rarity | undefined, name: string) => `<b class="r-${r ?? 'common'}">${esc(name)}</b>`;
 const qualityBadge = (kind: string, id: string) => {
   const q = itemQuality(kind === 'ing' ? 'ingredient' : kind, id);
-  return `<span class="item-quality quality-${q.tier}">${esc(q.label)}</span>`;
+  return `<span class="item-quality quality-${q.tier}">${'★'.repeat(q.tier)} ${esc(q.label)}</span>`;
+};
+/** 품질을 별 5칸으로: 채운 별이 등급 (기본 1 ~ 명품 5) */
+const stars = (kind: string, id: string) => {
+  const q = itemQuality(kind === 'ing' ? 'ingredient' : kind, id);
+  return `<span class="item-stars" role="img" aria-label="품질 ${q.tier}/5 ${esc(q.label)}" title="${esc(q.label)}">${'★'.repeat(q.tier)}<i>${'★'.repeat(5 - q.tier)}</i></span>`;
 };
 /** 마인크래프트식 아이템 칸 */
 export const slot = (icon: string, count: string | number = '', attrs = '', extra = '') =>
@@ -139,8 +144,13 @@ export function setupPanel(c: PanelCtx) {
   const slots = [...c.rodSlots].sort((a, b) => a.number - b.number);
   const target = (id: string, icon: string, sub: string, name: string) =>
     `<button class="rig-target ${c.rigTarget === id ? 'on' : ''}" data-act="rig-target" data-id="${id}"><span class="slot-art">${icon}</span><span><small>${sub}</small><b>${esc(name)}</b></span></button>`;
-  const targets = slots.map(r => target(r.slotId, itemIcon('rod', r.rodId), `${r.number}번 대 · ${esc(r.state)}`, r.name));
-  if (slots.length < MAX_DEPLOYED_RODS) targets.push(target('default', itemIcon('rig'), '새로 꺼낼 대', '기본 채비'));
+  // 1~3번 자리를 모두 보여 준다. 편 대는 그 대의 채비, 빈 자리는 꺼낼 때 쓸 채비를 미리 점검한다
+  const targets: string[] = [];
+  for (let n = 1; n <= MAX_DEPLOYED_RODS; n++) {
+    const placed = slots.filter(r => r.number === n);
+    if (placed.length) targets.push(...placed.map(r => target(r.slotId, itemIcon('rod', r.rodId), `${r.number}번 대 · ${esc(r.state)}`, r.name)));
+    else targets.push(target(`empty:${n}`, itemIcon('rig'), `${n}번 대 · 빈 자리`, '꺼낼 채비'));
+  }
   const steps: [RigStep, string, string, string][] = [
     ['rod', '낚싯대', itemIcon('rod', g.rodId), `${g.rod.name}`],
     ['line', '원줄', itemIcon('line', g.line.id), g.line.name],
@@ -231,18 +241,11 @@ export function marketPanel(c: PanelCtx) {
   const value = (id: string | undefined) => p.data.catches.find(r => r.id === id)?.value ?? 0;
   const rows = p.keepnet.map(f => `<li><span class="net-icon">${fishIcon(f.species.look)}</span><b>${f.species.name}</b><span>${f.cm.toFixed(1)}cm</span><span>${kgText(f.kg)}</span><span>${won(value(f.id))}</span>
     <button class="btn small" data-act="sell-one" data-id="${f.id}">판매</button></li>`).join('');
-  const market = SPECIES_LIST.map(sp => {
-    const m = marketMul(sp.id);
-    return `<li><b>${sp.name}</b><span>${won(SPECIES_RULES[sp.id].perKg * m)}/kg</span><em class="${m >= 1 ? 'up' : 'down'}">${m >= 1 ? '▲' : '▼'} ${Math.round((m - 1) * 100)}%</em></li>`;
-  }).join('');
   const sum = p.data.catches.filter(r => r.kept && !r.sold).reduce((n, r) => n + r.value, 0);
   return `<div class="panel">
   <p class="kicker">${won(p.data.coins)} 보유</p><h2>어시장 <small>살림망 ${p.keepnet.length}마리</small></h2>
   ${rows ? `<ul class="net">${rows}</ul>` : '<p class="empty">팔 고기가 없어요. 살림망에 고기를 담아 오세요</p>'}
   <button class="btn primary" data-act="sell" ${p.keepnet.length ? '' : 'disabled'}>모두 판매 · ${won(sum)}</button>
-  <h3>오늘의 시세 <small>매일 바뀝니다. 높은 크기 등급일수록 더 비싸게 팔려요</small></h3>
-  <ul class="market">${market}</ul>
-  
 </div>`;
 }
 
@@ -261,7 +264,7 @@ function inventoryItems(c: PanelCtx): InvItem[] {
       actions: [
         d.rods[r.id] > deployed.length ? `<button class="btn small primary" data-act="deploy" data-id="${r.id}">꺼내기</button>` : '',
         // 펼쳐 둔 대마다 회수 버튼: 채비를 걷고 가방에 넣는다
-        ...deployed.map(s => `<button class="btn small" data-act="recall" data-id="${s.slotId}" ${s.state === '물고기 걸림' ? 'disabled' : ''}>회수 · ${s.platform}번 좌대 ${s.number}번</button>`),
+        ...deployed.map(s => `<button class="btn small" data-act="recall" data-id="${s.slotId}" >회수 · ${s.platform}번 좌대 ${s.number}번</button>`),
         wear > 0.01 ? `<button class="btn small" data-act="repair" data-id="rod:${r.id}">수리 · ${won(p.repairCost(`rod:${r.id}`))}</button>` : ''] });
   }
   for (const l of LINES) if (d.lines.includes(l.id)) {
@@ -424,9 +427,7 @@ export function shopPanel(c: PanelCtx) {
   const goal = p.shopGoal;
   let visibleCount = 0;
   const brandOf = (kind: ShopKind, item: ShopItem) => productBrand(kind, item as BrandProduct);
-  const matches = (kind: ShopKind, item: ShopItem) => (!c.ui.shopBrand || brandIdForProduct(kind, item as BrandProduct) === c.ui.shopBrand)
-    && (!c.ui.shopQuality || itemQuality(kind, item.id).tier === c.ui.shopQuality)
-    && (!c.ui.shopAffordable || (!p.owns(kind, item.id) && (item.level ?? 1) <= p.level && item.price <= d.coins));
+  const matches = (kind: ShopKind, item: ShopItem) => (!c.ui.shopBrand || brandIdForProduct(kind, item as BrandProduct) === c.ui.shopBrand);
   const goalButton = (kind: ShopKind, item: ShopItem) => {
     if (p.owns(kind, item.id)) return '';
     const selected = goal?.kind === kind && goal.id === item.id;
@@ -469,9 +470,9 @@ export function shopPanel(c: PanelCtx) {
     const consumable = kind === 'bait' || kind === 'ingredient';
     return `<div class="tackle-card shop-tile ${locked ? 'locked' : ''} ${owned ? 'has-owned' : ''}">
       <button class="shop-tile-open" data-act="shop-model" data-id="${esc(key)}" aria-label="${esc(item.name)} 자세히">
-        <span class="tackle-card-art"><span class="slot-art">${icon}</span>${locked ? `<i class="lock">${itemIcon('lock')}</i>` : ''}</span>
+        <span class="tackle-card-side"><span class="tackle-card-art"><span class="slot-art">${icon}</span>${locked ? `<i class="lock">${itemIcon('lock')}</i>` : ''}</span>${stars(kind, item.id)}</span>
         <span class="tackle-card-body">
-          <span class="tackle-card-tags"><span class="shop-brand-tag">${brandOf(kind, item).name}</span>${qualityBadge(kind, item.id)}${owned ? '<span class="tackle-owned">보유</span>' : held ? `<span class="tackle-held">${esc(held)}</span>` : ''}</span>
+          <span class="tackle-card-tags"><span class="shop-brand-tag">${brandOf(kind, item).name}</span>${owned ? '<span class="tackle-owned">보유</span>' : held ? `<span class="tackle-held">${esc(held)}</span>` : ''}</span>
           <b class="r-${item.rarity ?? 'common'}">${esc(item.name)}</b>
           <small>${esc(q.purpose)}</small>
           <span class="tackle-card-meta">${specs.slice(0, summary).map(s => esc(s[1])).join(' · ')}</span>
@@ -536,9 +537,9 @@ export function shopPanel(c: PanelCtx) {
       const locked = minLevel > p.level;
       const price = prices.length ? `${won(Math.min(...prices))}${new Set(prices).size > 1 ? '부터' : ''}` : owned ? '모두 보유' : '기본 지급';
       const cardHtml = `<button class="tackle-card ${locked ? 'locked' : ''} ${owned ? 'has-owned' : ''}" data-act="shop-model" data-id="${esc(`${kind}:${model}`)}">
-        <span class="tackle-card-art r-${first.rarity ?? 'common'}"><span class="slot-art">${itemIcon(kind, first.id)}</span>${locked ? `<i class="lock">${itemIcon('lock')}</i>` : ''}</span>
+        <span class="tackle-card-side"><span class="tackle-card-art r-${first.rarity ?? 'common'}"><span class="slot-art">${itemIcon(kind, first.id)}</span>${locked ? `<i class="lock">${itemIcon('lock')}</i>` : ''}</span>${stars(kind, first.id)}</span>
         <span class="tackle-card-body">
-          <span class="tackle-card-tags"><span class="shop-brand-tag">${brand.name}</span>${qualityBadge(kind, first.id)}${owned ? `<span class="tackle-owned">보유 ${owned}/${all.length}</span>` : ''}</span>
+          <span class="tackle-card-tags"><span class="shop-brand-tag">${brand.name}</span>${owned ? `<span class="tackle-owned">보유 ${owned}/${all.length}</span>` : ''}</span>
           <b>${esc(first.modelName ?? model)}</b>
           <small>${esc(q.purpose)}</small>
           <span class="tackle-card-meta">${range(plain(cols(first)[0]), plain(cols(last)[0]))} · ${head[keyColumn]} ${range(plain(cols(first)[keyColumn]), plain(cols(last)[keyColumn]))}</span>
@@ -659,7 +660,7 @@ export function shopPanel(c: PanelCtx) {
   return `<div class="panel wide quality-shop"><p class="kicker">${ACTIVE_FISHERY.name} 상점 · ${won(d.coins)} · Lv.${p.level}</p><h2>상점</h2><p class="quality-guide">기본 → 실용 → 고급 → 전문 → 명품 · 품질·가격·성능은 게임 기준</p>
     ${saving}
     ${tabs('shop-tab', c.ui.shopTab, [['bait', '미끼·재료'], ['rod', '낚싯대'], ['line', '원줄'], ['float', '찌'], ['hook', '바늘'], ['net', '뜰채·살림망'], ['repair', '수리']])}
-    ${c.ui.shopTab !== 'repair' && !detailOpen ? `<div class="shop-filters">${tabs('shop-brand', c.ui.shopBrand ?? 'all', brandTabs)}${tabs('shop-quality', String(c.ui.shopQuality), [['0', '전체 품질'], ...QUALITY_LABELS.map((label, i): [string, string] => [String(i + 1), label])])}<button class="btn small ${c.ui.shopAffordable ? 'on' : ''}" data-act="shop-affordable" aria-pressed="${c.ui.shopAffordable}">구매 가능한 상품만</button><small>${visibleCount}개 ${c.ui.shopTab === 'line' || c.ui.shopTab === 'hook' ? '제품' : '상품'}</small></div>${brandIntro}` : ''}
+    ${c.ui.shopTab !== 'repair' && !detailOpen ? `<div class="shop-filters">${tabs('shop-brand', c.ui.shopBrand ?? 'all', brandTabs)}<small>${visibleCount}개 ${c.ui.shopTab === 'line' || c.ui.shopTab === 'hook' ? '제품' : '상품'}</small></div>${brandIntro}` : ''}
     <div class="shop-list ${detailOpen ? 'detail' : ''}">${body}</div>
     ${p.canGatherWorms ? '<button class="btn" data-act="gather">지렁이 채집 +5개</button>' : ''}
     </div>`;

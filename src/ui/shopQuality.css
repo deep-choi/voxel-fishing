@@ -192,3 +192,8 @@ body.touch #hud .quality-shop .tackle-card { min-height: 44px; }
   #hud .quality-shop .shop-brand-items { grid-template-columns: 1fr; }
   #hud .quality-shop .shop-brand-heading { align-items: flex-start; }
 }
+
+/* 상품 카드: 그림 아래 품질 별 */
+#hud .quality-shop .tackle-card-side { display: flex; flex-direction: column; align-items: center; gap: 5px; align-self: start; }
+#hud .item-stars { font-size: 12px; line-height: 1; letter-spacing: 1px; color: #d49a16; text-shadow: 1px 1px #5b4410; white-space: nowrap; }
+#hud .item-stars i { font-style: normal; color: #8f977f; text-shadow: none; }

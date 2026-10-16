@@ -7,15 +7,17 @@
 // 입질·걸림을 알려 주는 버튼은 두지 않는다. 입질은 찌를 보고 직접 알아채는 게임이다.
 
 export type HoldKey = 'primary' | 'lift';
-export type TapAction = 'interact' | 'retrieve' | 'zoom' | 'stow';
-export type TouchAct = 'cast' | 'hookset' | 'raise' | 'lower' | 'interact' | 'park' | 'retrieve' | 'zoom' | 'stow';
+export type TapAction = 'interact' | 'retrieve' | 'zoom' | 'stow' | 'take';
+export type TouchAct = 'cast' | 'hookset' | 'raise' | 'lower' | 'interact' | 'park' | 'retrieve' | 'zoom' | 'stow' | 'take';
 export interface TouchApi {
   move(x: number, y: number): void;
   look(dx: number, dy: number): void;
   hold(key: HoldKey, down: boolean): void;
-  tap(action: TapAction): void;
+  tap(action: TapAction, n?: number): void;
 }
 /** 지금 보여 줄 버튼 */
+/** 펼쳐 둔 낚싯대 한 대를 고르는 버튼 (n번) */
+export interface TouchRod { n: number; /** 찌가 물에 있어 눌러 챔질할 수 있다 */ strike?: boolean }
 export interface TouchLayout {
   main: TouchAct | null;
   alt: TouchAct | null;
@@ -25,6 +27,9 @@ export interface TouchLayout {
   /** interact 버튼 이름 (들기 · 꺼내기 · 낚시점 …) */
   label?: string;
   zoomOn?: boolean;
+  /** 펼쳐 둔 대 버튼. 'pick'은 대를 들지 않았을 때 큰 버튼으로, 'swap'은 다른 대를 들고 있을 때 작은 버튼으로 */
+  rods?: TouchRod[];
+  rodMode?: 'pick' | 'swap';
 }
 export const NO_TOUCH: TouchLayout = { main: null, alt: null, chips: [] };
 
@@ -38,25 +43,22 @@ const ACTS: Record<TouchAct, { label: string; sub?: string; hold?: HoldKey; tap?
   retrieve: { label: '걷기', tap: 'retrieve' },
   zoom: { label: '확대', tap: 'zoom' },
   stow: { label: '회수', tap: 'stow' },
+  take: { label: '들기', tap: 'take' },
 };
 const CHIPS = 3;
+const RODS = 3;
 
 let fullscreenDone = false;
-/** 안드로이드 앱(TWA)으로 열렸는지. 첫 페이지의 referrer에만 앱 주소가 남으므로 탭 세션에 기억한다 */
-const inAndroidApp = (() => {
-  try {
-    if (document.referrer.startsWith('android-app://com.deepchoi.fishing')) sessionStorage.setItem('android-app', '1');
-    return sessionStorage.getItem('android-app') === '1';
-  } catch { return document.referrer.startsWith('android-app://com.deepchoi.fishing'); }
-})();
-/** 전체 화면 (안드로이드 크롬). 웹은 가로·세로 모두 허용하고, 앱은 가로로 잠근다 (앱 설정이 안 먹는 브라우저 대비).
+/** 전체 화면 (안드로이드 크롬). 전체 화면이 되면 가로로 잠근다 (앱·웹 모두. 앱 설정이 안 먹는 브라우저 대비).
  *  사용자 터치 안에서만 열리므로 실패하면 다음 터치에 다시 시도 */
 export function enterFullscreen() {
   const el = document.documentElement;
+  // PC에서 창만 줄인 경우엔 전체 화면으로 바꾸지 않는다
+  if (!matchMedia('(pointer: coarse)').matches) return;
   if (fullscreenDone || document.fullscreenElement || !el.requestFullscreen) return;
   el.requestFullscreen({ navigationUI: 'hide' }).then(() => {
     fullscreenDone = true;
-    if (inAndroidApp) (screen.orientation as ScreenOrientation & { lock?(o: string): Promise<void> }).lock?.('landscape').catch(() => {});
+    (screen.orientation as ScreenOrientation & { lock?(o: string): Promise<void> }).lock?.('landscape').catch(() => {});
   }).catch(() => {});
 }
 
@@ -71,6 +73,8 @@ export class TouchControls {
   private readonly main: HTMLButtonElement;
   private readonly alt: HTMLButtonElement;
   private readonly chips: HTMLButtonElement[];
+  private readonly rodBox: HTMLElement;
+  private readonly rodBtns: HTMLButtonElement[];
   /** 누르고 있는 버튼 → 잡고 있는 입력 (버튼 이름이 바뀌어도 놓을 때 같은 입력을 푼다) */
   private readonly held = new Map<HTMLElement, HoldKey>();
   private layoutKey = '';
@@ -79,7 +83,8 @@ export class TouchControls {
     this.root.className = 'touch';
     this.root.innerHTML = `<div class="touch-look"></div><div class="stick"><i></i></div>
       <div class="touch-buttons"><div class="tchips">${'<button class="tbtn chip" hidden></button>'.repeat(CHIPS)}</div>
-      <button class="tbtn alt" hidden></button><button class="tbtn main" hidden></button></div>`;
+      <button class="tbtn alt" hidden></button><button class="tbtn main" hidden></button>
+      <div class="trods">${'<button class="tbtn rodbtn gap" data-act="take"></button>'.repeat(RODS)}</div></div>`;
     // HUD의 다른 버튼·패널이 위에 오도록 맨 앞에 둔다
     parent.prepend(this.root);
     this.base = this.root.querySelector('.stick')!;
@@ -87,6 +92,8 @@ export class TouchControls {
     this.main = this.root.querySelector('.tbtn.main')!;
     this.alt = this.root.querySelector('.tbtn.alt')!;
     this.chips = Array.from(this.root.querySelectorAll<HTMLButtonElement>('.tbtn.chip'));
+    this.rodBox = this.root.querySelector('.trods')!;
+    this.rodBtns = Array.from(this.root.querySelectorAll<HTMLButtonElement>('.tbtn.rodbtn'));
     const look = this.root.querySelector<HTMLElement>('.touch-look')!;
     // 길게 눌러도 복사·저장 메뉴가 뜨지 않게
     this.root.addEventListener('contextmenu', e => e.preventDefault());
@@ -130,7 +137,7 @@ export class TouchControls {
     look.addEventListener('pointerup', end);
     look.addEventListener('pointercancel', end);
 
-    for (const btn of [this.main, this.alt, ...this.chips]) {
+    for (const btn of [this.main, this.alt, ...this.chips, ...this.rodBtns]) {
       btn.addEventListener('pointerdown', e => {
         e.preventDefault();
         const def = ACTS[btn.dataset.act as TouchAct];
@@ -138,7 +145,7 @@ export class TouchControls {
         btn.setPointerCapture(e.pointerId);
         btn.classList.add('down');
         if (def.hold) { this.held.set(btn, def.hold); this.api.hold(def.hold, true); }
-        if (def.tap) this.api.tap(def.tap);
+        if (def.tap) this.api.tap(def.tap, Number(btn.dataset.n) || undefined);
         navigator.vibrate?.(8);
       });
       const up = () => {
@@ -170,6 +177,19 @@ export class TouchControls {
     this.main.classList.toggle('dim', !!l.dim);
     paint(this.alt, l.alt);
     this.chips.forEach((c, i) => paint(c, l.chips[i]));
+    const rods = l.rods ?? [], pick = l.rodMode === 'pick';
+    this.rodBox.classList.toggle('pick', pick);
+    this.rodBox.classList.toggle('swap', !pick);
+    this.rodBox.classList.toggle('after-main', !!l.main);
+    this.rodBox.classList.toggle('after-alt', !!l.alt);
+    this.rodBtns.forEach((b, i) => {
+      // 버튼 자리는 번호에 고정: 1번은 왼쪽, 3번은 오른쪽. 없는 번호는 빈 자리로 둔다
+      const r = rods.find(x => x.n === i + 1);
+      b.classList.toggle('gap', !r);
+      if (!r) { delete b.dataset.n; b.innerHTML = ''; return; }
+      b.dataset.n = String(r.n);
+      b.innerHTML = `<b>${r.n}번</b>${pick ? `<small>${r.strike ? '챔질' : '들기'}</small>` : ''}`;
+    });
   }
 
   /** 누르고 있던 입력을 모두 푼다 (메뉴가 열리거나 조작을 숨길 때) */

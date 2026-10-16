@@ -28,7 +28,7 @@ import { createPixelPass, type PixelLook } from './render/pixelPass';
 import { Float, FishingLine, Hook, Rod, RodHands, Splashes, rodRestElevation, type RodPose } from './render/tackle';
 import { Hud, type MenuModal } from './ui/hud';
 import { loadSettings, saveSettings, touchEnabled } from './ui/settings';
-import { NO_TOUCH, TouchControls, enterFullscreen, type TouchLayout } from './ui/touch';
+import { NO_TOUCH, TouchControls, enterFullscreen, type TouchLayout, type TouchRod } from './ui/touch';
 import { heightAt, PLAYER, shoreDistance, WATER_Y } from './world/lake';
 import { Mist } from './world/mist';
 import { setupSky, shared } from './world/sky';
@@ -353,35 +353,40 @@ const touch = new TouchControls(document.getElementById('hud')!, {
       if (down && playing()) input.hookset = true;
     }
   },
-  tap(action) {
+  tap(action, n) {
     if (action === 'interact') { if (game.phase === 'landed') finishCatch(true); else if (exploring()) interactSlot(); }
     if (action === 'retrieve') { if (game.phase === 'landed') finishCatch(false); else if (playing()) input.retrieve = true; }
     if (action === 'zoom' && exploring()) zoom = !zoom;
-    if (action === 'stow' && exploring()) removeRod();  },
+    if (action === 'stow' && exploring()) removeRod();
+    if (action === 'take' && exploring() && n) touchRod(n);
+  },
 });
 function applyTouch() {
   const on = touchEnabled(settings);
   document.body.classList.toggle('touch', on);
+  Float.view = on ? 1.8 : 1;
   touch.visible = on && hud.started;
   if (on && locked()) document.exitPointerLock();
 }
 applyTouch();
+// 창 크기를 바꾸면 모바일/PC 화면을 다시 고른다
+matchMedia('(pointer: coarse), (max-width: 900px), (max-height: 480px)').addEventListener('change', applyTouch);
 
 /** 터치 버튼: 지금 할 수 있는 동작만. 손에 든 대의 단계에 따라 큰 버튼이 던지기 → 챔질 → 세우기로 바뀐다 */
-function touchLayout(interact: string, nearRod: boolean): TouchLayout {
+function touchLayout(interact: string, nearRod: boolean, rods: TouchRod[]): TouchLayout {
   if (!exploring() || landing || parking) return NO_TOUCH;
   if (active) {
     switch (game.phase) {
-      case 'ready': return { main: 'cast', alt: null, chips: ['park', 'stow', 'zoom'], zoomOn: zoom };
+      case 'ready': return { main: 'cast', alt: null, chips: ['park', 'stow', 'zoom'], zoomOn: zoom, rods, rodMode: 'swap' };
       case 'charging': return { main: 'cast', alt: null, chips: [] };
       case 'casting': case 'flying': return { main: 'hookset', alt: null, chips: [], dim: true };
-      case 'settling': case 'waiting': return { main: 'hookset', alt: 'retrieve', chips: ['park', 'zoom'], zoomOn: zoom };
+      case 'settling': case 'waiting': return { main: 'hookset', alt: 'retrieve', chips: ['park', 'zoom'], zoomOn: zoom, rods, rodMode: 'swap' };
       case 'fighting': return { main: 'raise', alt: 'lower', chips: ['zoom'], zoomOn: zoom };
       default: return NO_TOUCH;
     }
   }
   // 대를 들지 않았을 때도 확대는 늘 쓸 수 있다
-  return { main: interact ? 'interact' : null, alt: null, chips: nearRod ? ['stow', 'zoom'] : ['zoom'], zoomOn: zoom, label: interact };
+  return { main: interact ? 'interact' : null, alt: null, chips: nearRod ? ['stow', 'zoom'] : ['zoom'], zoomOn: zoom, label: interact, rods, rodMode: 'pick' };
 }
 function joinTournament(id: string) {
   const def = TOURNAMENTS.find(t => t.id === id);
@@ -503,9 +508,18 @@ function travelFishery(id: string) {
   url.searchParams.set('map', target.id);
   location.assign(url.href);
 }
-/** 채비 창의 대: 자리 id면 그 대, 'default'면 새로 꺼낼 대의 기본 채비 */
+/** 빈 자리(2·3번)에 꺼낼 채비를 미리 점검하는 임시 채비. 1번은 기본 채비(idleGame) */
+const staged = new Map<number, Fishing>();
+function stagedGame(n: number) {
+  if (n === 1) return idleGame;
+  let g = staged.get(n);
+  if (!g) { g = new Fishing(PLAYER, player, grounds); g.setRig(player.data.rig); staged.set(n, g); }
+  return g;
+}
+/** 채비 창의 대: 자리 id면 그 대, 'empty:N'이면 N번 빈 자리에 꺼낼 채비 */
 function rigGameOf(target: string) {
-  return target === 'default' ? idleGame : mounted.get(target)?.game ?? game;
+  const em = /^empty:([1-3])$/.exec(target);
+  return em ? stagedGame(Number(em[1])) : mounted.get(target)?.game ?? game;
 }
 /** 채비 바꾸기: 고른 대(g)만 바뀐다. 기본 채비를 바꾸면 새로 꺼내는 대가 그 채비로 나온다 */
 function changeRig(kind: string, id: string, g: Fishing = game) {
@@ -530,7 +544,9 @@ function changeRig(kind: string, id: string, g: Fishing = game) {
     if (player.data.lines.includes(LINES[idx].id)) g.lineIdx = idx;
   }
   if (kind === 'depth') g.depthSet = Math.max(0.3, Math.min(g.rod.line, Number(id)));
-  if (g === idleGame) player.data.rig = g.rig;
+  // 마지막으로 바꾼 채비를 기억한다: 어느 대를 만졌든 다음에 꺼내는 대와 새로 접속했을 때 이 채비로 시작
+  player.data.rig = g.rig;
+  if (g !== idleGame) idleGame.setRig(g.rig);
   Array.from(mounted.values()).find(m => m.game === g)?.renderNow();
   player.save();
 }
@@ -543,7 +559,6 @@ function selectRod(next: MountedRod | null) {
   game = next?.game ?? idleGame;
   if (next) {
     next.group.visible = false;
-    yaw = next.slot.yaw; pitch = -0.15;
     if (game.fish) {
       fishModel = new FishModel(game.fish.sp.look, game.fish.cm / 100);
       scene.add(fishModel.group);
@@ -575,7 +590,8 @@ function prepareSlot(slot: RodSlot, rodId?: string) {
   let next = mounted.get(slot.id);
   if (!next) {
     if (mounted.size >= MAX_DEPLOYED_RODS) { hud.toast('낚싯대는 3대까지 펼칠 수 있어요 · 한 대를 회수한 뒤 꺼내세요'); return; }
-    let rig = rodId ? { ...player.data.rig, rodId } : player.data.rig;
+    const base = stagedGame(slot.number).rig;
+    let rig = rodId ? { ...base, rodId } : base;
     const available = (id: string) => (player.data.rods[id] ?? 0) > Array.from(mounted.values()).filter(m => m.game.rodId === id).length;
     if (!available(rig.rodId)) {
       const replacement = RODS.find(r => available(r.id));
@@ -586,6 +602,7 @@ function prepareSlot(slot: RodSlot, rodId?: string) {
     next.game.biteBoost = idleGame.biteBoost;
     next.game.fastTest = idleGame.fastTest;
     mounted.set(slot.id, next);
+    if (slot.number > 1) staged.delete(slot.number);
     scene.add(next.group);
     connectGame(next.game);
     player.save();
@@ -600,13 +617,27 @@ function parkRod() {
   input.primary = input.lift = input.hookset = input.retrieve = false;
 }
 
-function takeRod(number: number) {
-  if (!Number.isInteger(number) || number < 1 || number > MAX_DEPLOYED_RODS) return;
-  // 이 좌대에 이미 편 n번 대가 있으면 그 대를, 없으면 지금 선 받침틀의 n번 자리. 좌대 밖이면 편 순서대로
+/** n번 자리의 대: 이 좌대에 이미 편 n번 대, 없으면 선 받침틀의 n번 자리, 좌대 밖이면 편 순서대로 */
+function lookupRod(number: number) {
   const seat = platforms.nearestSeat(PLAYER.x, PLAYER.z);
   const placedHere = seat ? Array.from(mounted.values()).find(m => m.slot.platform === seat.platform && m.slot.number === number) : undefined;
   const slot = placedHere ? undefined : seat?.slots[number - 1];
   const next = placedHere ?? (slot ? mounted.get(slot.id) : Array.from(mounted.values())[number - 1]);
+  return { seat, placedHere, slot, next };
+}
+/** 거치한 대의 번호 버튼: 찌가 물에 있으면 챔질하며 대를 잡아 올리고, 아니면 그냥 든다. 시점은 그대로 */
+function touchRod(number: number) {
+  const m = lookupRod(number).next;
+  const phase = m?.game.phase;
+  if (!m || m === active || (phase !== 'waiting' && phase !== 'settling') || !platforms.canReachSlot(PLAYER.x, PLAYER.z, m.slot)) { takeRod(number); return; }
+  // 누른 순간의 입질로 걸림을 판정하고, 곧바로 대를 잡아 들어 올린다 (걸렸으면 그대로 파이팅, 아니면 걷힌 채비를 든 채)
+  m.game.strike();
+  takeRod(number);
+}
+function takeRod(number: number) {
+  if (!Number.isInteger(number) || number < 1 || number > MAX_DEPLOYED_RODS) return;
+  // 이 좌대에 이미 편 n번 대가 있으면 그 대를, 없으면 지금 선 받침틀의 n번 자리. 좌대 밖이면 편 순서대로
+  const { slot, next } = lookupRod(number);
   if (next && next === active) return;
   // 이미 든 대가 있으면 거치한 뒤 이어서 바꾼다 (거치 중에 또 누르면 무시)
   if (active && parking && afterPark) return;
@@ -1262,7 +1293,8 @@ function frame(dt: number, render = true) {
       lift: input.lift && playing() && handBlend >= 0.85,
       hookset: input.hookset && playing() && handBlend >= 0.85,
       retrieve: input.retrieve && playing() && handBlend >= 0.85,
-      aimYaw: active ? rodYaw : rodYaw + 0.06,
+      // 던지는 방향은 보는 방향 그대로 (대가 따라오는 중이어도 정중앙에 던지면 정중앙)
+      aimYaw: active ? THREE.MathUtils.clamp(yaw, active.slot.yaw - 0.65, active.slot.yaw + 0.65) : rodYaw + 0.06,
       tip: restTip,
       rodDir: pose.dir,
     });
@@ -1295,7 +1327,6 @@ function frame(dt: number, render = true) {
   const here = platforms.current(PLAYER.x, PLAYER.z);
   hud.setPlatforms(platforms.platforms.map(p => ({ id: p.id, name: p.name,
     rods: p.slots.filter(s => mounted.has(s.id)).length,
-    bites: p.slots.filter(s => mounted.get(s.id)?.game.phase === 'fighting').length,
   })), here?.id ?? null);
   const nearRod = near ? mounted.get(near.id) : undefined;
   const stallNear = platforms.nearStall(PLAYER.x, PLAYER.z);
@@ -1306,19 +1337,22 @@ function frame(dt: number, render = true) {
     : near && mounted.size < MAX_DEPLOYED_RODS ? '<kbd>E</kbd> 낚싯대 꺼내기' : '';
   hud.setInteraction(prompt, active ? `${active.slot.platform}번 좌대 · 낚싯대 ${active.slot.number}` : null);
   if (document.body.classList.contains('touch')) {
-    const label = stallNear ? stallNear.name : nearRod ? '들기' : near && mounted.size < MAX_DEPLOYED_RODS ? '꺼내기' : '';
-    touch.setLayout(touchLayout(label, !!nearRod));
+    // 펼쳐 둔 대는 번호 버튼으로 고른다. 큰 버튼은 낚시점이나 빈 받침틀 꺼내기만
+    const label = stallNear ? stallNear.name : !nearRod && near && mounted.size < MAX_DEPLOYED_RODS ? '꺼내기' : '';
+    const rods = Array.from(mounted.values(), (m, i) => ({ m, n: here ? m.slot.number : i + 1 }))
+      .filter(r => r.m !== active && (!here || r.m.slot.platform === here.id))
+      .sort((a, b) => a.n - b.n)
+      .map((r): TouchRod => ({ n: r.n, strike: r.m.game.phase === 'waiting' || r.m.game.phase === 'settling' }));
+    touch.setLayout(touchLayout(label, !!nearRod, rods));
   }
   hud.setRodSlots(Array.from(mounted.values(), (m, i) => ({ slotId: m.slot.id, number: here ? m.slot.number : i + 1, rodId: m.game.rodId, name: m.game.rod.name, platform: m.slot.platform,
-    state: m === active ? parking ? '거치 중' : '손에 듦' : m.game.phase === 'fighting' ? '물고기 걸림' : '거치됨',
-    active: m === active, biting: m.game.phase === 'fighting' })));
+    state: m === active ? parking ? '거치 중' : '손에 듦' : '거치됨',
+    active: m === active })));
   for (const s of platforms.slots) {
-    const g = mounted.get(s.id)?.game;
-    const biting = g?.phase === 'fighting';
     const mat = s.marker.material as THREE.MeshLambertMaterial;
-    // 받침대 표시: 물고기 걸림 주황 / 거치 초록 / 빈자리 노랑 (입질은 표시하지 않는다)
-    mat.color.set(biting ? '#ffae62' : mounted.has(s.id) ? '#83b8a4' : '#eac67d');
-    mat.emissiveIntensity = biting ? 0.7 + Math.sin(t * 8) * 0.3 : 0.2;
+    // 받침대 표시: 거치 초록 / 빈자리 노랑 (입질·걸림은 표시하지 않는다)
+    mat.color.set(mounted.has(s.id) ? '#83b8a4' : '#eac67d');
+    mat.emissiveIntensity = 0.2;
   }
   hud.update(pipOn);
 }

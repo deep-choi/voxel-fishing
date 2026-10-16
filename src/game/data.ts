@@ -148,12 +148,12 @@ export const HOOKS: HookSpec[] = [
   { id: 'monster', name: '가마카츠 이세니 13호', hold: 1.9, attraction: 0.72, price: 400, level: 1, rarity: 'uncommon', desc: '큰 미끼를 다는 메기·가물치용. 작은 물고기는 삼키기 어렵다' },
 ];
 export const BAIT_PACKS = [
-  { id: 'worm', name: '지렁이 10마리', count: 10, price: 30 },
-  { id: 'paste', name: '곡물떡밥 10회분', count: 10, price: 40 },
-  { id: 'corn', name: '옥수수 10알', count: 10, price: 35 },
-  { id: 'gluten', name: '기본 글루텐떡밥 10회분', count: 10, price: 45 },
-  { id: 'pellet', name: '기본 어분떡밥 10회분', count: 10, price: 50 },
-  { id: 'shrimp', name: '민물새우 10마리', count: 10, price: 65 },
+  { id: 'worm', name: '지렁이 50마리', count: 50, price: 150 },
+  { id: 'paste', name: '곡물떡밥 50회분', count: 50, price: 200 },
+  { id: 'corn', name: '옥수수 50알', count: 50, price: 175 },
+  { id: 'gluten', name: '기본 글루텐떡밥 50회분', count: 50, price: 225 },
+  { id: 'pellet', name: '기본 어분떡밥 50회분', count: 50, price: 250 },
+  { id: 'shrimp', name: '민물새우 50마리', count: 50, price: 325 },
 ] as const;
 
 // 실제 제품군에 게임 규격을 붙인다. 제조사 하중 사양으로 해석하지 않는다.
@@ -210,13 +210,13 @@ HOOKS.push(...SPECIALIST_HOOKS);
 FLOATS.push(...EXPANDED_FLOATS);
 
 export const INGREDIENTS = [
-  { id: 'bran', name: '미강', desc: '바늘에 다는 곡물떡밥의 기본 재료', price: 25, count: 10 },
-  { id: 'cornmeal', name: '옥수수 가루', desc: '곡물 향과 먹이 입자를 더한다', price: 35, count: 10 },
-  { id: 'attractor', name: '새우분', desc: '바늘 떡밥에 새우 향을 더한다', price: 45, count: 5 },
-  { id: 'fishmeal', name: '경원 아쿠아텍2 배합 재료', desc: '어분 떡밥. 잉어·향어용 바늘 떡밥 재료', price: 40, count: 10 },
-  { id: 'glutenpowder', name: '마루큐 와타글루 배합 재료', desc: '글루텐이 많아 바늘에 오래 붙는다. 떡밥의 결합력을 높인다', price: 35, count: 10 },
-  { id: 'barley', name: '보리 가루', desc: '보리 입자를 더하는 떡밥 재료', price: 30, count: 10 },
-  { id: 'strawberry', name: '딸기향 분말', desc: '딸기향을 더하는 떡밥 재료', price: 40, count: 10 },
+  { id: 'bran', name: '미강', desc: '바늘에 다는 곡물떡밥의 기본 재료', price: 125, count: 50 },
+  { id: 'cornmeal', name: '옥수수 가루', desc: '곡물 향과 먹이 입자를 더한다', price: 175, count: 50 },
+  { id: 'attractor', name: '새우분', desc: '바늘 떡밥에 새우 향을 더한다', price: 225, count: 25 },
+  { id: 'fishmeal', name: '경원 아쿠아텍2 배합 재료', desc: '어분 떡밥. 잉어·향어용 바늘 떡밥 재료', price: 200, count: 50 },
+  { id: 'glutenpowder', name: '마루큐 와타글루 배합 재료', desc: '글루텐이 많아 바늘에 오래 붙는다. 떡밥의 결합력을 높인다', price: 175, count: 50 },
+  { id: 'barley', name: '보리 가루', desc: '보리 입자를 더하는 떡밥 재료', price: 150, count: 50 },
+  { id: 'strawberry', name: '딸기향 분말', desc: '딸기향을 더하는 떡밥 재료', price: 200, count: 50 },
 ] as const;
 
 // 게임 화면과 가방에서 쓸 가상 제조사 이름을 붙인다. 바늘은 제품 모델과 호수도 명시한다.

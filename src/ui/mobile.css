@@ -75,6 +75,17 @@ body.touch .stick.on { opacity: 0.9; }
 .tbtn[data-act="hookset"] { background: #b8902ae6; }
 .tbtn[data-act="lower"] { background: #4f6a7ae6; }
 .tbtn[data-act="interact"] { background: #8a6a3fe6; }
+.tbtn[data-act="take"] { background: #8a6a3fe6; }
+/* 펼쳐 둔 낚싯대 고르기: 대를 들지 않았을 때는 큰 버튼, 다른 대를 들고 있을 때는 작은 버튼 */
+.trods { position: absolute; right: 0; bottom: 0; display: flex; flex-direction: row; align-items: flex-end; gap: 8px; }
+.tbtn.rodbtn { position: static; }
+.tbtn.rodbtn.gap { visibility: hidden; pointer-events: none; }
+.trods.pick .rodbtn { width: 76px; height: 76px; font-size: 16px; }
+.trods.pick.after-main { right: 104px; }
+.trods.swap { right: 104px; bottom: 4px; gap: 6px; }
+.trods.swap.after-alt { right: 178px; }
+.trods.swap .rodbtn { width: 50px; height: 50px; font-size: 13px; }
+body.touch .hotbar { display: none; }
 /* ── 조과 카드: 오른쪽, 화면 높이에 맞춰 ── */
 body.touch .catch .catch-card { width: min(320px, 60vw); max-height: calc(100dvh - 16px - var(--sat) - var(--sab)); overflow-y: auto; overscroll-behavior: contain; }
 body.touch .catch-card .row .btn { min-height: 48px; }
@@ -191,6 +202,9 @@ body.touch .start-card .btn.primary { min-height: 52px; }
   body.touch .tbtn.main { width: 82px; height: 82px; font-size: 15px; }
   body.touch .tbtn.alt { right: 92px; width: 60px; height: 60px; }
   body.touch .tchips { bottom: 92px; }
+  .trods.pick .rodbtn { width: 66px; height: 66px; font-size: 15px; }
+  .trods.pick.after-main, .trods.swap { right: 92px; }
+  .trods.swap.after-alt { right: 160px; }
   body.touch .hotbar .slot { width: 38px; height: 38px; }
   body.touch .mc-xp { display: none; }
   body.touch .pip { width: 72px; height: 96px; }
@@ -205,7 +219,7 @@ body.touch .start-card .btn.primary { min-height: 52px; }
    아래쪽에 핫바 한 줄을 두고, 그 위에 조이스틱·상황 버튼, 더 위에 파이팅 막대를 쌓아 서로 겹치지 않게 한다. */
 @media (orientation: portrait) and (max-width: 700px) {
   body.touch .stick { left: calc(72px + var(--sal)); top: calc(100% - 170px - var(--sab)); }
-  .touch-buttons { bottom: calc(66px + var(--sab, 0px)); }
+  .touch-buttons { bottom: calc(30px + var(--sab, 0px)); }
   body.touch #hud .fight { bottom: calc(232px + var(--sab)); width: min(420px, 88vw); }
   body.touch .power { top: calc(50% + 18px); }
 

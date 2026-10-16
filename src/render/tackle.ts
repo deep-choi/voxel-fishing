@@ -470,6 +470,8 @@ export class Float {
   readonly group = new THREE.Group();
   private readonly body = new THREE.Group();
   static readonly SCALE = 1.6;
+  /** 화면 표시 배율. 작은 화면(모바일)에서는 찌가 멀리서도 보이게 키운다 */
+  static view = 1;
   /** 찌톱 색 띠 재질: 밤에 은은하게 */
   private tips: THREE.MeshStandardMaterial[] = [];
   /** 케미라이트·LED: 밤에 찌 불빛의 중심 */
@@ -620,6 +622,7 @@ export class Float {
   place(x: number, y: number, z: number, tilt: number, yaw: number) {
     this.group.position.set(x, y, z);
     this.group.rotation.set(0, yaw, 0);
+    this.group.scale.setScalar(Float.view);
     // 누울 때는 무게중심(몸통 가운데) 부근이 수면에 뜬다
     const ang = tilt * Math.PI * 0.5;
     this.body.rotation.set(0, 0, ang);
@@ -630,6 +633,7 @@ export class Float {
   hang(x: number, y: number, z: number, swingX: number, swingZ: number) {
     this.group.position.set(x, y, z);
     this.group.rotation.set(swingX, 0, swingZ);
+    this.group.scale.setScalar(Float.view);
     this.body.rotation.set(0, 0, 0);
     // 길어진 찌톱 끝이 줄에 매달린다
     this.body.position.set(0, -this.top * this.body.scale.y, 0);

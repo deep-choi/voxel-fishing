@@ -32,7 +32,7 @@ export interface HudHandlers {
   travel(id: number): void;
   fishery(id: string): void;
   online(action: string, value?: string): void;
-  /** 채비 바꾸기. target: 자리 id 또는 'default'(새로 꺼낼 대) */
+  /** 채비 바꾸기. target: 자리 id 또는 'empty:N'(N번 빈 자리에 꺼낼 대) */
   rig(kind: string, id: string, target: string): void;
   /** 채비 창에서 고른 대의 낚시 상태 */
   rigGame(target: string): Fishing;
@@ -81,7 +81,7 @@ export class Hud {
   private rodSlots: P.RodStatus[] = [];
   private tournament: Tournament | null = null;
   private online = emptyOnlineState();
-  private readonly ui: P.UiState = { inventoryTab: 'all', invSelected: null, feedDraft: { name: '', parts: [] }, feedFilter: 'all', feedView: 'list', shopTab: 'bait', shopModel: null, shopBrand: null, shopQuality: 0, shopAffordable: false, rigStep: 'rod', rigTarget: null, recordSpecies: 'crucian', weekly: false, questTab: 'personal', goalGroup: 'start', resetArmed: false, onlineSpecies: 'crucian', onlineScope: 'all', nicknameDraft: '', chatDraft: '' };
+  private readonly ui: P.UiState = { inventoryTab: 'all', invSelected: null, feedDraft: { name: '', parts: [] }, feedFilter: 'all', feedView: 'list', shopTab: 'bait', shopModel: null, shopBrand: null, rigStep: 'rod', rigTarget: null, recordSpecies: 'crucian', weekly: false, questTab: 'personal', goalGroup: 'start', resetArmed: false, onlineSpecies: 'crucian', onlineScope: 'all', nicknameDraft: '', chatDraft: '' };
 
   constructor(
     private readonly root: HTMLElement,
@@ -208,8 +208,6 @@ export class Hud {
       case 'shop-tab': this.ui.shopTab = id as P.ShopTab; this.ui.shopModel = null; this.ui.shopBrand = null; rerender(); break;
       case 'shop-brand': this.ui.shopBrand = id === 'all' ? null : id; this.ui.shopModel = null; this.el.modal.querySelector('.panel')?.scrollTo?.(0, 0); rerender(); break;
       case 'shop-model': this.ui.shopModel = id || null; this.el.modal.querySelector('.panel')?.scrollTo?.(0, 0); rerender(); break;
-      case 'shop-quality': this.ui.shopQuality = Math.max(0, Math.min(5, Number(id) || 0)); rerender(); break;
-      case 'shop-affordable': this.ui.shopAffordable = !this.ui.shopAffordable; rerender(); break;
       case 'shop-goal': this.h.shopGoal(kind as ShopKind, id); rerender(); break;
       case 'clear-shop-goal': this.h.clearShopGoal(); rerender(); break;
       case 'sell': this.h.sell(); rerender(); break;
@@ -429,11 +427,14 @@ export class Hud {
     if (changed && (this.modal === 'inventory' || this.modal === 'setup')) this.renderModal();
   }
 
-  /** 채비 창의 대: 고른 대가 없거나 사라졌으면 손에 든 대 → 새로 꺼낼 대 → 첫 대 */
+  /** 채비 창의 대: 고른 대가 없거나 사라졌으면 손에 든 대 → 첫 빈 자리 → 첫 대 */
   private rigTarget() {
-    const t = this.ui.rigTarget, free = this.rodSlots.length < MAX_DEPLOYED_RODS;
-    if (t && (t === 'default' ? free : this.rodSlots.some(r => r.slotId === t))) return t;
-    return this.rodSlots.find(r => r.active)?.slotId ?? (free ? 'default' : this.rodSlots[0]?.slotId ?? 'default');
+    const t = this.ui.rigTarget;
+    const empty = (n: number) => `empty:${n}`;
+    const firstEmpty = [1, 2, 3].find(n => !this.rodSlots.some(r => r.number === n));
+    const em = /^empty:([1-3])$/.exec(t ?? '');
+    if (t && (em ? !this.rodSlots.some(r => r.number === Number(em[1])) : this.rodSlots.some(r => r.slotId === t))) return t;
+    return this.rodSlots.find(r => r.active)?.slotId ?? (firstEmpty ? empty(firstEmpty) : this.rodSlots[0]?.slotId ?? empty(1));
   }
 
   private ctx(): P.PanelCtx {
@@ -519,7 +520,7 @@ export class Hud {
       const rod = this.rodSlots.find(r => r.number === i + 1 && (this.currentPlatform === null || r.platform === this.currentPlatform));
       const canPrepare = this.currentPlatform !== null && this.rodSlots.length < MAX_DEPLOYED_RODS;
       return P.slot(itemIcon('rod', rod?.rodId), '', `data-act="take" data-id="${i + 1}" ${rod || canPrepare ? '' : 'disabled'} title="${rod ? P.esc(`${rod.name} · ${rod.platform}번 좌대 · ${rod.state}`) : `${['왼쪽', '가운데', '오른쪽'][i]} 빈 자리 · 낚싯대 꺼내기`}"`,
-        `${rod?.active ? 'on' : ''} ${rod?.biting ? 'biting' : ''} ${rod && !rod.active ? 'parked' : ''} ${rod ? '' : 'ghost'}`);
+        `${rod?.active ? 'on' : ''} ${rod && !rod.active ? 'parked' : ''} ${rod ? '' : 'ghost'}`);
     });
     this.set('hotbar', this.el.hotbar, rods.map((s, i) => `<div class="hot"><kbd>${i + 1}</kbd>${s}</div>`).join(''));
   }
