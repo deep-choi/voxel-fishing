@@ -376,7 +376,7 @@ function touchLayout(interact: string, nearRod: boolean): TouchLayout {
       case 'charging': return { main: 'cast', alt: null, chips: [] };
       case 'casting': case 'flying': return { main: 'hookset', alt: null, chips: [], dim: true };
       case 'settling': case 'waiting': return { main: 'hookset', alt: 'retrieve', chips: ['park', 'zoom'], zoomOn: zoom };
-      case 'fighting': return { main: 'raise', alt: 'lower', chips: [] };
+      case 'fighting': return { main: 'raise', alt: 'lower', chips: ['zoom'], zoomOn: zoom };
       default: return NO_TOUCH;
     }
   }
@@ -1097,7 +1097,7 @@ function updateWalk(dt: number, t: number) {
         walk.warnAt = t;
       }
     } else {
-      // 확대는 걸어 다녀도 유지된다 (끄는 건 확대 버튼·Z·챔질뿐)
+      // 확대는 걸어 다니거나 챔질해도 유지된다 (끄는 건 확대 버튼·Z뿐)
       const fx = -Math.sin(yaw);
       const fz = -Math.cos(yaw);
       let dx = fx * iz + -fz * ix;
@@ -1250,8 +1250,6 @@ function frame(dt: number, render = true) {
   if (!paused) {
     if (hud.started) updateWorld(dt);
     grounds.update(dt);
-    // 챔질(대를 드는 순간) 확대가 풀린다
-    if (input.hookset && playing() && handBlend >= 0.85) zoom = false;
     // 부러진 낚싯대는 수리하기 전까지 던질 수 없다
     const broken = game.phase === 'ready' && player.wearOf(`rod:${game.rodId}`) >= 1;
     if (broken && input.primary && playing() && performance.now() - brokenWarnAt > 3000) {

@@ -42,11 +42,22 @@ const ACTS: Record<TouchAct, { label: string; sub?: string; hold?: HoldKey; tap?
 const CHIPS = 3;
 
 let fullscreenDone = false;
-/** 전체 화면 (안드로이드 크롬). 가로·세로 모두 허용하므로 방향은 잠그지 않는다. 사용자 터치 안에서만 열리므로 실패하면 다음 터치에 다시 시도 */
+/** 안드로이드 앱(TWA)으로 열렸는지. 첫 페이지의 referrer에만 앱 주소가 남으므로 탭 세션에 기억한다 */
+const inAndroidApp = (() => {
+  try {
+    if (document.referrer.startsWith('android-app://com.deepchoi.fishing')) sessionStorage.setItem('android-app', '1');
+    return sessionStorage.getItem('android-app') === '1';
+  } catch { return document.referrer.startsWith('android-app://com.deepchoi.fishing'); }
+})();
+/** 전체 화면 (안드로이드 크롬). 웹은 가로·세로 모두 허용하고, 앱은 가로로 잠근다 (앱 설정이 안 먹는 브라우저 대비).
+ *  사용자 터치 안에서만 열리므로 실패하면 다음 터치에 다시 시도 */
 export function enterFullscreen() {
   const el = document.documentElement;
   if (fullscreenDone || document.fullscreenElement || !el.requestFullscreen) return;
-  el.requestFullscreen({ navigationUI: 'hide' }).then(() => { fullscreenDone = true; }).catch(() => {});
+  el.requestFullscreen({ navigationUI: 'hide' }).then(() => {
+    fullscreenDone = true;
+    if (inAndroidApp) (screen.orientation as ScreenOrientation & { lock?(o: string): Promise<void> }).lock?.('landscape').catch(() => {});
+  }).catch(() => {});
 }
 
 export class TouchControls {
