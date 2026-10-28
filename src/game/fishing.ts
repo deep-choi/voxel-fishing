@@ -297,6 +297,7 @@ export class Fishing {
 
   private launch(inp: FrameInput) {
     const p = this.castPower;
+    this.floatSide = 0;
     // 앞치기: 대 끝에서 원줄이 닿는 만큼만 (찌 아래 수심만큼 줄이 물속으로 들어간다)
     const tipH = Math.max(0.5, inp.tip.y - WATER_Y);
     const reach = Math.max(1.2, Math.sqrt(Math.max(0, (this.rod.line - this.depthSet * 0.9) ** 2 - tipH * tipH)));
@@ -465,6 +466,7 @@ export class Fishing {
 
   private retrieve() {
     this.phase = 'ready';
+    this.floatSide = 0;
     this.bite = null;
     this.lineOut = 0;
     this.spotDepth = null;

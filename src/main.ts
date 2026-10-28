@@ -718,7 +718,6 @@ function connectGame(source: Fishing) { source.on((e) => {
   if (source !== game) {
     if (e.type === 'ripple') water.ripple(e.x, e.z, e.size);
     if (e.type === 'splash') splashes.burst(e.x, e.z, e.size);
-    if (e.type === 'hooked') hud.toast('다른 좌대의 낚싯대에 물고기가 걸렸어요!', 'good');
     return;
   }
   switch (e.type) {

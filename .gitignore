@@ -6,3 +6,5 @@ firebase-debug.log*
 .env
 .env.*
 *.local
+
+firestore-debug.log
